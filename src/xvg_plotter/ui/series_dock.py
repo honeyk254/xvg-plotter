@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core.models import XvgFile
+from ..core.models import XvgFile, series_label
 from . import theme
 
 
@@ -147,7 +147,7 @@ class SeriesDock(QWidget):
     def _make_group(self, f: XvgFile, active_ds: dict, visible: dict) -> _Group:
         box = QGroupBox(f.path.name)
         v = QVBoxLayout(box)
-        v.setContentsMargins(theme.SP_S, 0, theme.SP_S, 0)
+        v.setContentsMargins(theme.SP_S, 2, theme.SP_S, 2)
         v.setSpacing(theme.SP_S - 1)
         combo = None
         if not f.datasets:
@@ -164,7 +164,7 @@ class SeriesDock(QWidget):
             v.addWidget(combo)
         checks = []
         for i, s in enumerate(ds.series):
-            label = s.legend or f"column {s.y_col}"
+            label = series_label(s, f.y_label, len(ds.series))
             if s.dy_col is not None:
                 label += f"  (± col {s.dy_col})"
             if s.dx_col is not None:

@@ -228,7 +228,7 @@ QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
 QGroupBox {{
     background: {t.panel};
     border: 1px solid {t.border}; border-radius: 7px;
-    margin-top: 9px; padding: 10px 7px 7px 7px;
+    margin-top: 17px; padding: 9px 8px 9px 8px;
     font-weight: 600;
 }}
 QGroupBox::title {{

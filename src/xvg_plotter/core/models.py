@@ -52,3 +52,17 @@ class XvgFile:
     y_label: str | None = None
     warnings: list[str] = field(default_factory=list)
     stats: ParseStats = field(default_factory=ParseStats)
+
+
+def series_label(s: SeriesSpec, y_label: str | None = None,
+                 series_count: int = 1) -> str:
+    """Single source for series display names (dock, legend, averages).
+
+    Preference: `@ sN legend` from the file, then the file's y-axis label when
+    the dataset has a single series (e.g. "RMSD (nm)"), else the column number.
+    """
+    if s.legend:
+        return s.legend
+    if series_count == 1 and (y_label or "").strip():
+        return y_label.strip()
+    return f"column {s.y_col}"

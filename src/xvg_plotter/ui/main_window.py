@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 from .. import settings
 from ..core import analysis
-from ..core.models import XvgFile
+from ..core.models import XvgFile, series_label
 from ..export import copy_image, save_figure
 from ..version import APP_VERSION
 from . import theme
