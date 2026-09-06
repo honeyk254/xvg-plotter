@@ -6,6 +6,7 @@
 |---|---|
 | **Source** | 30 simulated panelists ([USER_PANEL.md](USER_PANEL.md)), 110 problem mentions total |
 | **Remediation** | [REMEDIATION_PLAN.md](REMEDIATION_PLAN.md) — phased fix plan covering every item below |
+| **v1.0.1** | Shipped fixes for **C01–C07, C10, C12–C14, C25–C28, C31, C32, C34, C36, C39, C40** (see [CHANGELOG.md](CHANGELOG.md)). **C38** needed no code — dark mode (Auto/Light/Dark) was already implemented in v1.0. Remaining open: C08, C09, C11, C15–C24, C29, C30, C33, C35 (Phases 2–4 of the remediation plan). |
 | **Frequency** | = number of panelists facing the problem |
 | **Status** | Where the issue stands relative to PRD.md / SPEC.md v1: **covered** (v1 addresses it), **partial** (addressed but with a gap), **backlog** (explicitly deferred in PRD §9 / SPEC §16), **non-goal** (deliberately out of v1 scope), **gap** (not addressed anywhere in the docs) |
 
@@ -40,7 +41,7 @@ Freq. 9 (P01, P03, P05, P07, P12, P21, P23, P25, P30) · Severity **High** · St
 
 **C03 · Heavy download and slow cold start on old/slow hardware.** ~80–150 MB artifacts (SPEC §16); onefile self-extraction on HDD makes cold start 10–20 s (P23), far past the < 3 s budget. Freq. 2 (P19, P23) · Severity Medium · Status: covered — SPEC §12 already mandates a onedir fallback if startup regresses. Keep that guardrail enforced in the smoke checklist.
 
-**C04 · AppImage friction on Linux.** `chmod +x` barrier for novices; fails outright without FUSE (cluster nodes, NFS homes); workaround undocumented. Freq. 2 (P06, P07) · Severity Medium · Status: gap — PRD §7 assumes the AppImage just runs. → Document `--appimage-extract`; consider offering a `.deb`/tarball.
+**C04 · AppImage friction on Linux.** `chmod +x` barrier for novices; fails outright without FUSE (cluster nodes, NFS homes); workaround undocumented. Freq. 2 (P06, P07) · Severity Medium · Status: **fixed in v1.0.1** — build.py already auto-falls back to `--appimage-extract-and-run` without FUSE; FUSE/chmod now documented in README (a `.deb`/tarball remains a possible follow-up).
 
 **C05 · No silent/per-machine deployment for managed fleets.** Per-user Inno Setup only; no MSI/parametrized install for sysadmins. Freq. 1 (P07) · Severity Medium · Status: gap. → Inno Setup supports silent flags; document them, add a per-machine option.
 
@@ -118,7 +119,7 @@ Freq. 9 (P01, P03, P05, P07, P12, P21, P23, P25, P30) · Severity **High** · St
 
 **C37 · No onboarding, help, or jargon explanations.** Zero tooltips/tour; the README is developer-oriented; PRD's own bar is "zero documentation" golden path — but *understanding* the science (Rg, xydy, replicas) is left to luck. Freq. 4 (P01, P05, P08, P21) · Severity **High** for the novice segment · Status: gap. → Tooltips on every control, a one-screen first-run intro, and plain-language legend for common GROMACS analyses.
 
-**C38 · No dark-mode/theme handling.** Hard-coded light UI + white canvas glare on dark desktop themes. Freq. 1 (P06) · Severity Low · Status: gap (cosmetic).
+**C38 · No dark-mode/theme handling.** Hard-coded light UI + white canvas glare on dark desktop themes. Freq. 1 (P06) · Severity Low · Status: **false alarm** — the v1.0 audit found a full theme system (`ui/theme.py`, View ▸ Auto/Light/Dark, canvas + toolbar retheme, tested); no fix needed.
 
 ## G. Trust, support & settings
 

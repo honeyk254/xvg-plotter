@@ -10,7 +10,7 @@ replacement for xmgrace, built with PySide6 + matplotlib.
 ![Release](https://img.shields.io/github/v/release/honeyk254/xvg-plotter)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-informational)
-![Tests](https://img.shields.io/badge/tests-24%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-52%20passing-brightgreen)
 
 <p align="center">
   <table>
@@ -34,18 +34,23 @@ including overlays, replica averaging, and clipboard-ready exports for slides.
   modified date — parsed from headers, problem files flagged in red with the reason.
 - **Plot instantly**: click a file — title, axis labels and legend are pulled from the XVG header.
 - **Compare**: checkbox several files to overlay them; select replicas and toggle
-  **Average replicas** for a mean ± SD band (with faint member curves).
-- **Annotate**: moving-average smoothing overlay (adjustable window), ps → ns/µs/ms time-axis
-  conversion with relabeling, log axes, grid, legend placement, color palettes,
+  **Average replicas** for a mean ± SD band (with faint member curves) and an optional
+  **Common time range** so short replicas can't truncate long ones.
+- **Annotate**: moving-average smoothing overlay (adjustable window, with a physical-time
+  hint such as "≈ 2.1 ns"), ps → ns/µs/ms time-axis conversion with relabeling (guarded to
+  real time axes), log axes, grid, legend placement, color palettes,
   line style/width, title and label overrides.
 - **Interact**: pan, zoom, home, live cursor coordinates; click a legend entry to
-  show/hide a series. Style tweaks keep your zoom.
+  show/hide a series. Style tweaks keep your zoom. Drag `.xvg` files or folders
+  straight onto the window.
 - **Theme**: polished light & dark UI (Fusion + themed matplotlib canvas).
   Auto (follows the OS) / Light / Dark, remembered between runs.
-- **Export**: PNG (DPI 100–600), PDF, SVG, EPS, transparent background — plus
-  *Copy Image* straight to the clipboard for slides.
+- **Export**: PNG/TIFF (DPI 100–600), PDF, SVG, EPS, transparent background — plus
+  *Copy Image* straight to the clipboard for slides (rendered at the export DPI).
 - **Native app**: own icon, single-instance (opening a second `.xvg` reuses the running
-  window), recent folders, remembered window/export settings. No command line required.
+  window), pinnable recent folders, remembered window/export settings, manual
+  *Check for updates*, settings export/import, live min/max/mean of plotted series.
+  No command line required.
 
 ## Download
 
@@ -60,21 +65,57 @@ Grab `XVGPlotter.exe` from the [latest release](https://github.com/honeyk254/xvg
 Double-clicking an `.xvg` file (where the association is registered) opens it directly in the app;
 launching with a file argument plots it immediately.
 
+### Verify your download
+
+Every build writes `SHA256SUMS.txt` next to the artifacts. Compare before running:
+
+```text
+Windows (PowerShell):  certutil -hashfile XVGPlotter.exe SHA256
+macOS / Linux:         shasum -a 256 <artifact>
+```
+
+### Security warnings are expected (unsigned build)
+
+v1 is not code-signed (see [RELEASE.md](RELEASE.md) for IT/procurement guidance):
+
+- **Windows**: SmartScreen may show "Windows protected your PC" → *More info* → *Run anyway*.
+  Some antivirus products flag unsigned exes — verify the SHA-256 above first.
+- **macOS**: first launch of the unsigned build → right-click → Open (Gatekeeper).
+- **Linux**: `chmod +x` once, then run. On hosts without FUSE (cluster nodes, NFS homes)
+  the AppImage automatically runs via `--appimage-extract-and-run`.
+
+**File association**: the installer's `.xvg` checkbox is **off by default**, so an existing
+grace install keeps handling `.xvg`. Tick it, or use Help ▸ *Set as default .xvg viewer*
+(Windows) later — this only adds XVG Plotter as a choice and never removes another tool.
+
+### Supported formats
+
+GROMACS `.xvg` analysis output (RMSD, energy, RDF, Rg …). Trajectories (`.xtc`),
+density maps (`.xpm`) and `.edr` files are **not** supported — this app is a viewer
+for `.xvg` files only.
+
 ## Build from source
 
-Requirements: Python ≥ 3.10.
+Requirements: Python ≥ 3.10. **Build inside a virtual environment** — PyInstaller
+bundles the dependency graph of the interpreter it runs under, so a clean venv keeps
+foreign global packages out of the binary:
 
 ```bash
-pip install -e .[dev]
+python -m venv .venv
+.venv/Scripts/pip install -e .[dev]     # Linux/macOS: .venv/bin/pip
+```
 
 # Windows (PyInstaller exe; adds an Inno Setup installer if ISCC.exe is installed)
-python packaging/build.py
+python packaging/build.py              # portable exe + per-user installer
+python packaging/build.py --onedir     # installer wraps a onedir build (fast cold start)
+python packaging/build.py --machine    # per-machine installer variant (admin)
 
 # macOS (app bundle + DMG) / Linux (AppImage)
 python packaging/build.py
 ```
 
-Artifacts land in `dist/`. Icons are generated with `python assets/make_icons.py` (Pillow).
+Artifacts land in `dist/`, with a `SHA256SUMS.txt` covering each build.
+Icons are generated with `python assets/make_icons.py` (Pillow).
 
 ## Development
 
@@ -94,11 +135,19 @@ Layout: `src/xvg_plotter/core/` (parser, models, analysis — pure Python, unit-
 - [SPEC.md](SPEC.md) — technical specification
 - [USER_PANEL.md](USER_PANEL.md) — simulated 30-person user panel
 - [PROBLEM_LIST.md](PROBLEM_LIST.md) — consolidated pain points, mapped to v1 status
+- [REMEDIATION_PLAN.md](REMEDIATION_PLAN.md) — phased fix plan (all 40 problems)
+- [CHANGELOG.md](CHANGELOG.md) — release notes
+- [RELEASE.md](RELEASE.md) — release & IT-deployment notes (checksums, silent install)
 
 ## Notes
 
 - Handles GROMACS-style XVG: `@ title/xaxis/yaxis` headers, `@ sN legend`, error-bar files
   (`@ sN type xydy|xydx|xydxdy`), multi-dataset files (`&` separators), NaN/Inf values,
-  CRLF and BOM. Unknown grace directives are ignored gracefully; malformed rows are skipped
-  and reported per file — a bad file never crashes the app.
+  CRLF and BOM. Unknown grace directives are ignored gracefully — their count is shown per
+  file in the file list; malformed rows are skipped and reported per file — a bad file
+  never crashes the app.
+- "auto" time-unit conversion only rescales axes whose label identifies a time axis;
+  a frame-index or other non-time X axis is left untouched (explicit unit picks still work).
+- A rotating log (`xvg_plotter.log`) lives in the per-user app-data folder; unexpected
+  errors show a dialog with copyable details and are written there.
 - macOS builds are unsigned in v1 (right-click → Open on first launch).

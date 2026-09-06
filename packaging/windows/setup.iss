@@ -1,25 +1,38 @@
 ; Inno Setup 6 script for XVG Plotter (SPEC §12).
-; Input: dist\XVGPlotter.exe produced by packaging\build.py
-; Output: packaging\windows\Output\XVGPlotter-Setup.exe
-; Installs per-user (no admin), creates Start Menu + Desktop shortcuts,
-; optionally registers .xvg file association.
+; Inputs (all optional, passed by packaging\build.py):
+;   /DAPP_VERSION=<ver>   version string (default: keep in sync with version.py)
+;   /DONEDIR              installer wraps dist\XVGPlotter\ (onedir build)
+;   /DMACHINE             per-machine installer variant (admin; default: per-user)
+; Output: packaging\windows\Output\XVGPlotter-Setup-<ver>[-machine].exe
+; Per-user install (no admin) by default; creates Start Menu + Desktop
+; shortcuts; optionally registers the .xvg file association (unchecked task).
 
 #define MyAppName "XVG Plotter"
-#define MyAppVersion "1.0.0"
+#ifndef APP_VERSION
+#define APP_VERSION "1.0.1"
+#endif
 #define MyAppExe "XVGPlotter.exe"
 
 [Setup]
 AppId={{7C1B6E4A-52D8-4B0F-9E3A-XVGPLOTTER01}
 AppName={#MyAppName}
-AppVersion={#MyAppVersion}
+AppVersion={#APP_VERSION}
 AppPublisher=XVG Plotter
 DefaultDirName={autopf}\XVGPlotter
 DefaultGroupName={#MyAppName}
-OutputBaseFilename=XVGPlotter-Setup
+#ifdef MACHINE
+OutputBaseFilename=XVGPlotter-Setup-{#APP_VERSION}-machine
+#else
+OutputBaseFilename=XVGPlotter-Setup-{#APP_VERSION}
+#endif
 OutputDir=Output
 Compression=lzma2
 SolidCompression=yes
+#ifdef MACHINE
+PrivilegesRequired=admin
+#else
 PrivilegesRequired=lowest
+#endif
 ChangesAssociations=yes
 SetupIconFile=..\..\src\xvg_plotter\assets\icon.ico
 WizardStyle=modern
@@ -29,8 +42,13 @@ Name: "desktopicon"; Description: "Create a &Desktop shortcut"; GroupDescription
 Name: "assoc"; Description: "Open .xvg files with {#MyAppName} by default"; \
     GroupDescription: "File association:"; Flags: unchecked
 
+#ifdef ONEDIR
+[Files]
+Source: "..\..\dist\XVGPlotter\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+#else
 [Files]
 Source: "..\..\dist\XVGPlotter.exe"; DestDir: "{app}"; Flags: ignoreversion
+#endif
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"

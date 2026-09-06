@@ -255,6 +255,9 @@ Docks are collapsible and movable; layout state persists.
 | Refresh scan | F5 |
 | Export… | Ctrl/Cmd+E |
 | Copy image to clipboard | Ctrl/Cmd+Shift+C |
+| Export / Import settings (v1.0.1) | File menu (no shortcut) |
+| Check for updates (v1.0.1, manual) | Help menu |
+| Set as default .xvg viewer (v1.0.1, Windows) | Help menu |
 | Quit | Ctrl/Cmd+Q |
 | About | via Help menu |
 
@@ -267,7 +270,10 @@ Docks are collapsible and movable; layout state persists.
 - Trigger: “Average replicas” toggled while ≥ 2 selected files have **compatible signatures**
   (same column count, same kinds, same labels).
 - X-grids may differ across replicas (different `nst`): align by linear interpolation onto the
-  first file's X grid; if alignment drops/creates > 5 % of points, emit a warning.
+  first file's X grid; if > 5 % of aligned points fall outside a replica's own range, emit a
+  warning naming the replica and the truncated span (v1.0.1).
+- **Common time range** option (v1.0.1): average only the span every replica covers, so
+  shorter runs never truncate longer ones.
 - Render: mean line (thicker), SD band via `fill_between(mean−σ, mean+σ)` at α=0.25;
   “show members” draws each replica thin & faint beneath.
 - Incompatible selection → toggle disabled with explanatory tooltip (no silent behavior).
@@ -276,6 +282,8 @@ Docks are collapsible and movable; layout state persists.
 
 - Centered moving average, window N (odd-enforced spinbox, default 21 points); `np.convolve`
   with edge padding.
+- The dock shows the window's physical span for the active file ("≈ 2.1 ns") via the median
+  X spacing (v1.0.1).
 - Rendered as a dashed overlay in the matching series color; original curve always remains.
 - Applies per visible series; excluded from exports when hidden.
 
@@ -283,6 +291,10 @@ Docks are collapsible and movable; layout state persists.
 
 - Applies to the X axis. Units: ps (native) → ns (÷1e3), µs (÷1e6), ms (÷1e9), plus **auto**
   (largest unit such that x_max ≥ 1).
+- **Time-axis guard (v1.0.1)**: `auto` rescales only when the X label identifies a time axis
+  (`time`, `ps`, `ns`, `µs`, `ms`, `fs`; unlabeled counts as time). A non-time X (frame index,
+  position) keeps its label untouched on `auto`; an explicit unit pick is still honored.
+  `dx` error columns are converted alongside X.
 - Axis label updated in place: `Time (ps)` → `Time (ns)`; files without a labeled axis get a
   generated label.
 
@@ -291,12 +303,14 @@ Docks are collapsible and movable; layout state persists.
 ## 8. Export
 
 - Dialog fields: filename (default: sanitized plot title or first file stem), destination folder
-  (default: source data folder), format (PNG/PDF/SVG/EPS), DPI spin (100–600, default 300;
-  PNG-only), transparent background checkbox; remembers last choices via `settings.py`.
+  (default: source data folder), format (PNG/PDF/SVG/EPS/TIFF), DPI spin (100–600, default 300;
+  PNG/TIFF), transparent background checkbox (disabled for EPS, which cannot carry
+  transparency); remembers last choices via `settings.py`.
 - Implementation: `fig.savefig()` with `bbox_inches="tight"`, `facecolor="none"` when
-  transparent; raster DPI applies to PNG only (vector formats ignore it).
-- **Copy image to clipboard**: render canvas to `QImage` → `QApplication.clipboard().setImage()`
-  (no extra dependency).
+  transparent; raster DPI applies to PNG/TIFF only (vector formats ignore it).
+- **Copy image to clipboard**: rendered at the configured export DPI (PNG via
+  `savefig` → `QImage`; v1.0.1 — previously a widget grab at screen resolution), then
+  `QApplication.clipboard().setImage()`.
 - Export uses the *current view state* (log axes, units, smoothing, averaging, zoom window).
 
 ---
@@ -306,7 +320,8 @@ Docks are collapsible and movable; layout state persists.
 | Key | Content |
 |---|---|
 | `geometry/state` | Window size, dock layout |
-| `recents` | Last 10 folders (deduplicated, most-recent-first) |
+| `recents` | Last 10 folders (deduplicated, most-recent-first, dead paths pruned) |
+| `pinned` | Pinned folders, shown above recents (v1.0.1) |
 | `last_folder` | Restored on launch |
 | `export/*` | format, dpi, transparent, last destination |
 | `view/*` | unit mode, smoothing window, grid, legend position defaults |
@@ -327,6 +342,10 @@ Backed by the registry (Windows) / plist (macOS) / ini (Linux) per Qt convention
 4. **File association launch**: argv containing an `.xvg` path → open that file's folder and
    plot it immediately (maps to U1).
 5. **Missing files** (deleted between scan and click): row marked stale, warning shown, no crash.
+6. **Logging (v1.0.1)**: rotating file log (`xvg_plotter.log`, 1 MB × 3) in the per-user
+   app-data folder; `sys.excepthook` + Qt message handler write there and show a crash
+   dialog with copyable details (nothing is transmitted). Startup time is logged against
+   the §13 cold-start budget.
 
 ---
 
@@ -347,9 +366,12 @@ cross-compile** — each artifact is produced on its native OS (manual run per O
 
 | OS | Steps | Artifact |
 |---|---|---|
-| Windows | PyInstaller `--noconsole --onefile --icon assets/icon.ico --name XVGPlotter` → Inno Setup `setup.iss` (AppId, Start Menu + Desktop icons, `.xvg` ProgId + `shell\open\command` + DefaultIcon, uninstall entries) | `XVGPlotter-Setup.exe` + portable `.exe` |
+| Windows | PyInstaller `--noconsole --onefile --icon assets/icon.ico --name XVGPlotter` (`--onedir` variant via `build.py --onedir`; the installer then wraps the directory and a zip is emitted) → Inno Setup `setup.iss` (`/DAPP_VERSION`, `/DONEDIR`, `/DMACHINE` defines; AppId, Start Menu + Desktop icons, `.xvg` ProgId + `shell\open\command` + DefaultIcon, uninstall entries; per-user by default, per-machine via `/DMACHINE`) | `XVGPlotter-Setup-<ver>[.exe|-machine.exe]` + portable exe/zip |
 | macOS | PyInstaller `--windowed --name "XVG Plotter" --icon assets/icon.icns`; bundle `Info.plist` additions: `CFBundleDocumentTypes` + exported UTI `org.xvgplotter.xvg` → DMG with Applications symlink | `XVGPlotter.dmg` |
-| Linux | PyInstaller `--noconsole --onedir`; AppDir with `.desktop` (`Exec`, `Icon`, `MimeType=application/x-xvg;`), hicolor icons → `appimagetool` | `XVGPlotter-x86_64.AppImage` |
+| Linux | PyInstaller `--noconsole --onedir`; AppDir with `.desktop` (`Exec`, `Icon`, `MimeType=application/x-xvg;`), hicolor icons → `appimagetool` | `XVGPlotter-x86_64-<ver>.AppImage` |
+
+Every build finishes by writing `SHA256SUMS.txt` (v1.0.1) next to the file artifacts it
+produced.
 
 Guardrails: `--noconsole/--windowed` everywhere (no console flash); hidden-imports for
 matplotlib backends verified per platform; onefile startup-time checked (< 3 s warm) — fall back

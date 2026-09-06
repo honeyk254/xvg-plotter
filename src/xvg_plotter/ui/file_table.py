@@ -115,10 +115,14 @@ class FileTable(QTableWidget):
 
         name = QTableWidgetItem(f.path.name)
         name.setData(Qt.ItemDataRole.UserRole, f)
-        if f.warnings:
+        tips = list(f.warnings)
+        if f.stats.directives_ignored:  # C10: never silently drop grace styling
+            tips.append(f"{f.stats.directives_ignored} grace directive(s) ignored — "
+                        f"in-file styling not applied")
+        if tips:
             self._warned.add(f.path)
             name.setText("⚠ " + f.path.name)
-            name.setToolTip("\n".join(f.warnings))
+            name.setToolTip("\n".join(tips))
             name.setForeground(QBrush(QColor(current().danger)))
 
         try:

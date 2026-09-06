@@ -25,6 +25,7 @@ from . import theme
 class AnalysisState:
     average: bool = False
     members: bool = False
+    common_range: bool = False
     smooth: bool = False
     window: int = 21
 
@@ -59,24 +60,33 @@ class SeriesDock(QWidget):
 
         self.chk_average = QCheckBox("Average replicas (mean ± SD)")
         self.chk_members = QCheckBox("Show member curves")
+        self.chk_common = QCheckBox("Common time range")
+        self.chk_common.setToolTip(
+            "Average only the time span every replica shares — shorter runs no "
+            "longer truncate longer ones")
         self.chk_smooth = QCheckBox("Smooth overlay")
         self.spin_window = QSpinBox()
         self.spin_window.setRange(3, 2001)
         self.spin_window.setSingleStep(2)
         self.spin_window.setValue(21)
         self.spin_window.setToolTip("Moving-average window (points)")
+        self.lbl_time = QLabel("")
         self.chk_smooth.toggled.connect(self.spin_window.setEnabled)
         self.chk_average.toggled.connect(self.chk_members.setEnabled)
+        self.chk_average.toggled.connect(self.chk_common.setEnabled)
         self.chk_members.setEnabled(False)
+        self.chk_common.setEnabled(False)
         self.spin_window.setEnabled(False)
 
         a = QVBoxLayout()
         a.addWidget(self.chk_average)
         a.addWidget(self.chk_members)
+        a.addWidget(self.chk_common)
         row = QHBoxLayout()
         row.addWidget(self.chk_smooth)
         row.addWidget(QLabel("window"))
         row.addWidget(self.spin_window)
+        row.addWidget(self.lbl_time)
 
         opts = QGroupBox("Analysis")
         ov = QVBoxLayout(opts)
@@ -88,7 +98,8 @@ class SeriesDock(QWidget):
         outer.setSpacing(theme.SP_S)
         outer.addWidget(self.scroll, 1)
         outer.addWidget(opts)
-        for w in (self.chk_average, self.chk_members, self.chk_smooth):
+        for w in (self.chk_average, self.chk_members, self.chk_common,
+                  self.chk_smooth):
             w.toggled.connect(self.options_changed)
         self.spin_window.valueChanged.connect(self.options_changed)
 
@@ -98,9 +109,14 @@ class SeriesDock(QWidget):
         return AnalysisState(
             average=self.chk_average.isChecked(),
             members=self.chk_members.isChecked(),
+            common_range=self.chk_common.isChecked(),
             smooth=self.chk_smooth.isChecked(),
             window=self.spin_window.value(),
         )
+
+    def set_time_hint(self, text: str) -> None:
+        """Physical span of the smoothing window for the active file (C28)."""
+        self.lbl_time.setText(text)
 
     # -- series groups ---------------------------------------------------------
 

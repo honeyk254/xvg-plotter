@@ -19,7 +19,8 @@ from PySide6.QtWidgets import (
 
 from . import theme
 
-FORMATS = ("png", "pdf", "svg", "eps")
+FORMATS = ("png", "pdf", "svg", "eps", "tif")
+RASTER_FORMATS = ("png", "tif")
 
 
 class ExportDialog(QDialog):
@@ -40,7 +41,7 @@ class ExportDialog(QDialog):
         self.spin_dpi.setValue(dpi)
         self.chk_transparent = QCheckBox("transparent background")
         self.chk_transparent.setChecked(transparent)
-        self.spin_dpi.setEnabled(fmt == "png")
+        self.spin_dpi.setEnabled(fmt in RASTER_FORMATS)
 
         form = QFormLayout()
         form.setContentsMargins(theme.SP_L, theme.SP_L, theme.SP_L, theme.SP_L)
@@ -52,7 +53,7 @@ class ExportDialog(QDialog):
         dirrow.addWidget(self.btn_dir)
         form.addRow("Folder", dirrow)
         form.addRow("Format", self.cmb_fmt)
-        form.addRow("DPI (PNG only)", self.spin_dpi)
+        form.addRow("DPI (raster: PNG/TIFF)", self.spin_dpi)
         form.addRow("", self.chk_transparent)
 
         self.bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
@@ -68,11 +69,18 @@ class ExportDialog(QDialog):
         lay.addLayout(bb_row)
 
         self.btn_dir.clicked.connect(self._browse)
-        self.cmb_fmt.currentTextChanged.connect(
-            lambda t: self.spin_dpi.setEnabled(t == "png"))
+        self.cmb_fmt.currentTextChanged.connect(self._fmt_changed)
         self.ed_name.textChanged.connect(self._validate)
         self.ed_dir.textChanged.connect(self._validate)
+        self._fmt_changed(self.cmb_fmt.currentText())  # initial EPS/TIFF state
         self._validate()
+
+    def _fmt_changed(self, t: str) -> None:
+        self.spin_dpi.setEnabled(t in RASTER_FORMATS)
+        eps = t == "eps"  # EPS cannot carry a transparent background
+        self.chk_transparent.setEnabled(not eps)
+        self.chk_transparent.setToolTip(
+            "EPS does not support a transparent background" if eps else "")
 
     def _browse(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "Export to folder", self.ed_dir.text())
@@ -90,4 +98,5 @@ class ExportDialog(QDialog):
         if not name.lower().endswith("." + fmt):
             name += "." + fmt
         return {"path": d / name, "dpi": self.spin_dpi.value(),
-                "transparent": self.chk_transparent.isChecked(), "fmt": fmt}
+                "transparent": self.chk_transparent.isChecked() and fmt != "eps",
+                "fmt": fmt}

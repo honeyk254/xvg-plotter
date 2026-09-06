@@ -120,12 +120,13 @@ Researchers fall back to ad-hoc matplotlib scripts that are rewritten (and forgo
 - Plotting via matplotlib: single-click plot, multi-file overlay, per-series toggle, error bars.
 - Interaction: pan/zoom/home toolbar, coordinate readout, legend-click to toggle series.
 - Styling: color cycle, line/marker toggles, grid, log-X/log-Y, legend position, title/axis-label overrides.
-- Export: PNG / PDF / SVG / EPS with DPI control and transparent-background option; copy image to clipboard.
+- Export: PNG / TIFF / PDF / SVG / EPS with DPI control and transparent-background option; copy image to clipboard (at the export DPI). Settings export/import.
 - Settings persistence: last folder, recents, window geometry, export defaults.
 
 ### P1 — should ship in v1 (agreed must-have extras)
 
-- **Replica averaging** (mean ± SD, member-curve display toggle).
+- **Replica averaging** (mean ± SD, member-curve display toggle, optional common time
+  range so shorter replicas cannot truncate longer ones).
 - **Smoothing** (centered moving average, adjustable window, drawn as overlay).
 - **Time-unit conversion** (ps → ns/µs/ms, auto-pick mode, axis relabeling).
 

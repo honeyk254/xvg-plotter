@@ -21,6 +21,7 @@ class FolderBar(QWidget):
     folder_requested = Signal(str)
     refresh_requested = Signal()
     filter_changed = Signal(str)
+    pin_toggled = Signal(bool)
 
     def __init__(self, recents: list[str], parent=None):
         super().__init__(parent)
@@ -32,10 +33,14 @@ class FolderBar(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.combo.setMinimumContentsLength(26)
         self.combo.addItems(recents)
-        self.combo.setToolTip("Current folder; the list holds recent folders")
+        self.combo.setToolTip("Current folder; the list holds pinned and recent folders")
         self.btn_refresh = QPushButton()
         self.btn_refresh.setIcon(icon("refresh"))
         self.btn_refresh.setToolTip("Rescan folder (F5)")
+        self.btn_pin = QPushButton()
+        self.btn_pin.setIcon(icon("pin"))
+        self.btn_pin.setCheckable(True)
+        self.btn_pin.setToolTip("Pin this folder to the top of the list")
         self.edit_filter = QLineEdit()
         self.edit_filter.setPlaceholderText("filter…")
         self.edit_filter.setClearButtonEnabled(True)
@@ -48,17 +53,20 @@ class FolderBar(QWidget):
         lay.addWidget(self.btn_open)
         lay.addWidget(self.combo, 1)
         lay.addWidget(self.btn_refresh)
+        lay.addWidget(self.btn_pin)
         lay.addWidget(self.edit_filter)
 
         self.btn_open.clicked.connect(self.pick_folder)
         self.combo.activated.connect(self._emit_current)
         self.combo.lineEdit().returnPressed.connect(self._emit_current)
         self.btn_refresh.clicked.connect(self.refresh_requested)
+        self.btn_pin.toggled.connect(self.pin_toggled)
         self.edit_filter.textChanged.connect(self.filter_changed)
 
     def retheme(self) -> None:
         self.btn_open.setIcon(icon("folder"))
         self.btn_refresh.setIcon(icon("refresh"))
+        self.btn_pin.setIcon(icon("pin"))
         while self.edit_filter.actions():
             self.edit_filter.removeAction(self.edit_filter.actions()[0])
         self.edit_filter.addAction(icon("search"), QLineEdit.ActionPosition.LeadingPosition)
@@ -69,6 +77,13 @@ class FolderBar(QWidget):
         self.combo.addItems(recents)
         self.combo.setCurrentText(path)
         self.combo.blockSignals(False)
+
+    def set_pinned(self, on: bool) -> None:
+        self.btn_pin.blockSignals(True)
+        self.btn_pin.setChecked(on)
+        self.btn_pin.blockSignals(False)
+        self.btn_pin.setToolTip("Unpin this folder" if on
+                                else "Pin this folder to the top of the list")
 
     def current_folder(self) -> str:
         return self.combo.currentText().strip()

@@ -1,19 +1,27 @@
 """Build XVG Plotter distributables (SPEC §12).
 
 Run on the TARGET OS (PyInstaller cannot cross-compile):
-    python packaging/build.py            # builds for the current OS
-    python packaging/build.py --no-dmg   # macOS: skip DMG step
+    python packaging/build.py               # builds for the current OS
+    python packaging/build.py --no-dmg      # macOS: skip DMG step
     python packaging/build.py --no-install  # Windows: skip Inno Setup step
+    python packaging/build.py --onedir      # Windows: installer wraps a onedir build
+                                            # (fast cold start, SPEC §12 guardrail)
+    python packaging/build.py --machine     # Windows: per-machine installer variant
+
+Every file artifact produced is listed in dist/SHA256SUMS.txt (C07).
 
 Artifacts:
-    Windows -> dist/XVGPlotter.exe (+ installer via Inno Setup)
+    Windows -> dist/XVGPlotter.exe or dist/XVGPlotter-<ver>-win64.zip
+               (+ installer(s) via Inno Setup)
     macOS   -> dist/XVG Plotter.app (+ XVGPlotter.dmg)
-    Linux   -> dist/XVGPlotter-x86_64.AppImage
+    Linux   -> dist/XVGPlotter-x86_64-<ver>.AppImage
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import plistlib
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -39,7 +47,34 @@ def _run(cmd: list[str]) -> None:
     subprocess.run([str(c) for c in cmd], check=True, cwd=ROOT)
 
 
-def _pyinstaller(target: str) -> Path:
+def _checksums(artifacts: list[Path], out_dir: Path | None = None) -> None:
+    """Write SHA256SUMS.txt covering every file artifact (C07).
+
+    Merges with an existing sums file so sequential build runs accumulate
+    their artifacts instead of clobbering each other."""
+    out = (out_dir or ROOT / "dist") / "SHA256SUMS.txt"
+    lines: list[str] = []
+    if out.exists():
+        existing = out.read_text(encoding="utf-8").splitlines()
+    else:
+        existing = []
+    new_names = {p.name for p in artifacts if p.is_file()}
+    lines += [ln for ln in existing
+              if ln.strip() and ln.split("  ", 1)[-1] not in new_names]
+    for p in artifacts:
+        if not p.is_file():
+            continue
+        h = hashlib.sha256()
+        with open(p, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        lines.append(f"{h.hexdigest()}  {p.name}")
+    if lines:
+        out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"checksums: {out}")
+
+
+def _pyinstaller(target: str, onedir: bool = False) -> Path:
     import platform as _p
     sep = ";" if _p.system() == "Windows" else ":"
     icon = {"windows": ASSETS / "icon.ico", "darwin": ASSETS / "icon.icns"}.get(target, ASSETS / "icon.png")
@@ -50,19 +85,35 @@ def _pyinstaller(target: str) -> Path:
            "--add-data", f"{ASSETS}{sep}xvg_plotter/assets",
            "--collect-submodules", "xvg_plotter"]
     if target == "windows":
-        cmd += ["--noconsole", "--onefile"]
+        cmd += ["--noconsole", "--onedir" if onedir else "--onefile"]
     elif target == "darwin":
         cmd += ["--windowed", "--osx-bundle-identifier", "org.xvgplotter.xvgplotter"]
     else:
         cmd += ["--noconsole", "--onedir"]
     cmd.append(ROOT / "packaging" / "entry.py")
     _run(cmd)
-    return ROOT / "dist" / ("XVG Plotter.app" if target == "darwin" else "XVGPlotter")
+    if target == "darwin":
+        return ROOT / "dist" / "XVG Plotter.app"
+    if target == "windows" and not onedir:
+        return ROOT / "dist" / "XVGPlotter.exe"  # onefile: the exe itself
+    return ROOT / "dist" / "XVGPlotter"
 
 
-def _windows(exe: Path, do_install: bool) -> None:
-    print(f"built {exe}")
+def _windows(exe: Path, do_install: bool, onedir: bool = False,
+             machine: bool = False) -> None:
+    artifacts: list[Path] = []
+    if onedir:
+        d = ROOT / "dist" / "XVGPlotter"
+        zip_path = ROOT / "dist" / f"XVGPlotter-{VERSION}-win64.zip"
+        print(f"packing {zip_path}")
+        shutil.make_archive(str(zip_path.with_suffix("")), "zip", d)
+        artifacts.append(zip_path)
+        print(f"built {d}")
+    else:
+        artifacts.append(exe)
+        print(f"built {exe}")
     if not do_install:
+        _checksums(artifacts)
         return
     iscc = None
     for cand in (Path(r"C:\Program Files (x86)\Inno Setup 6\ISCC.exe"),
@@ -71,10 +122,21 @@ def _windows(exe: Path, do_install: bool) -> None:
             iscc = cand
             break
     if iscc is None:
-        print("Inno Setup 6 not found; skipping installer (portable exe is ready).")
+        print("Inno Setup 6 not found; skipping installer (portable build is ready).")
+        _checksums(artifacts)
         return
-    _run([iscc, ROOT / "packaging" / "windows" / "setup.iss"])
-    print(f"installer: {ROOT / 'packaging/windows/Output/XVGPlotter-Setup.exe'}")
+    cmd = [iscc, f"/DAPP_VERSION={VERSION}"]
+    if onedir:
+        cmd.append("/DONEDIR")
+    if machine:
+        cmd.append("/DMACHINE")
+    cmd.append(ROOT / "packaging" / "windows" / "setup.iss")
+    _run(cmd)
+    base = f"XVGPlotter-Setup-{VERSION}" + ("-machine" if machine else "")
+    installer = ROOT / "packaging/windows/Output" / f"{base}.exe"
+    artifacts.append(installer)
+    print(f"installer: {installer}")
+    _checksums(artifacts)
 
 
 def _macos(app: Path, do_dmg: bool) -> None:
@@ -102,6 +164,7 @@ def _macos(app: Path, do_dmg: bool) -> None:
     _run(["hdiutil", "create", "-volname", "XVGPlotter", "-srcfolder", app,
           "-ov", dmg])
     print(f"dmg: {dmg}")
+    _checksums([dmg])
 
 
 def _linux(_exe: Path) -> None:
@@ -127,19 +190,25 @@ def _linux(_exe: Path) -> None:
         cmd.append("--appimage-extract-and-run")
     _run(cmd + [appdir, out])
     print(f"appimage: {out}")
+    _checksums([out])
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-dmg", action="store_true")
     ap.add_argument("--no-install", action="store_true")
+    ap.add_argument("--onedir", action="store_true",
+                    help="Windows: installer wraps a onedir build (fast cold start)")
+    ap.add_argument("--machine", action="store_true",
+                    help="Windows: per-machine installer variant (admin install)")
     args = ap.parse_args()
 
     import platform
     system = {"Windows": "windows", "Darwin": "darwin"}.get(platform.system(), "linux")
-    exe = _pyinstaller(system)
+    onedir = args.onedir or system != "windows"  # Linux is already onedir
+    exe = _pyinstaller(system, onedir)
     if system == "windows":
-        _windows(exe, not args.no_install)
+        _windows(exe, not args.no_install, args.onedir, args.machine)
     elif system == "darwin":
         _macos(exe, not args.no_dmg)
     else:

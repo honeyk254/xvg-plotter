@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from .options import LEGEND_LOCS, LINE_STYLES, PALETTES  # noqa: F401  (re-exported)
 from .theme import Tokens, current
+from ..core import analysis
 
 
 @dataclass
@@ -117,6 +118,13 @@ class PlotPanel(QWidget):
         self._tokens = t
         mpl.rcParams.update({
             "font.size": 9,
+            # C36: platform CJK fonts after DejaVu keep µ Å ± ε and Chinese/
+            # Japanese/Korean titles from rendering as boxes; unicode_minus
+            # avoids U+2212, which several of those fonts lack.
+            "font.family": "sans-serif",
+            "font.sans-serif": ["DejaVu Sans", "Microsoft YaHei", "PingFang SC",
+                                "Noto Sans CJK SC", "Malgun Gothic", "Arial"],
+            "axes.unicode_minus": False,
             "text.color": t.text,
             "axes.titlecolor": t.text,
             "axes.labelcolor": t.text,
@@ -190,8 +198,20 @@ class PlotPanel(QWidget):
         if prev_xlim is not None:
             ax.set_xlim(prev_xlim)
             ax.set_ylim(prev_ylim)
+        if not st.entries:  # C12: say what the app reads while nothing is plotted
+            ax.text(0.5, 0.5,
+                    "Open a folder and click a GROMACS .xvg file to plot.\n"
+                    "Reads .xvg analysis files (RMSD, energy, RDF …).\n"
+                    "Trajectories (.xtc), maps (.xpm) and .edr files are not supported.",
+                    transform=ax.transAxes, ha="center", va="center",
+                    color=t.dim, fontsize=10)
         self._view = (labels_now, ax.get_xlim(), ax.get_ylim())
         self._last_state = st
+        # C34: a textual summary of what is plotted, for screen readers
+        labeled = [(e.label, e.y) for e in st.entries if getattr(e, "label", "")]
+        self.canvas.setAccessibleName(st.title or "plot")
+        self.canvas.setAccessibleDescription(
+            analysis.series_summary(labeled) or "empty plot — no file selected")
         self.toolbar.push_current()  # re-seed nav history so Home works after a redraw
         self.canvas.draw_idle()
 

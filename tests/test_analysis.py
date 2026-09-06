@@ -4,8 +4,12 @@ from xvg_plotter.core.analysis import (
     auto_unit,
     average_replicas,
     convert_x,
+    is_time_label,
+    median_dt,
     moving_average,
     scale_label,
+    series_summary,
+    summary_stats,
 )
 
 
@@ -33,13 +37,82 @@ def test_average_equal_grids():
     assert warn is None
 
 
-def test_average_interp_warning():
+def test_average_grids_differ_full_coverage_is_quiet():
+    # grids differ but every replica covers the whole range: interpolation
+    # fabricates nothing, so no warning (C27 replaced the always-warn rule)
     x1 = np.array([0.0, 1.0, 2.0])
     x2 = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
     xm, mean, std, warn = average_replicas([(x1, [0, 10, 20]), (x2, [0, 5, 10, 15, 20])])
     assert len(xm) == 3
     assert np.allclose(mean, [0, 10, 20])
-    assert warn and "interpolation" in warn
+    assert warn is None
+
+
+def test_average_truncation_warns_over_5pct():
+    x1 = np.linspace(0.0, 100.0, 101)
+    x2 = np.linspace(0.0, 50.0, 51)  # covers only half of replica 1's range
+    xm, mean, std, warn = average_replicas(
+        [(x1, np.zeros(101)), (x2, np.zeros(51))])
+    assert warn and "outside it" in warn and "Common time range" in warn
+    assert xm.size == 101
+
+
+def test_average_small_mismatch_stays_quiet():
+    # ~3% of the aligned range lies outside replica 2 — under the 5% threshold
+    x1 = np.linspace(0.0, 100.0, 101)
+    x2 = np.linspace(0.0, 97.0, 98)
+    _, _, _, warn = average_replicas([(x1, np.zeros(101)), (x2, np.zeros(98))])
+    assert warn is None
+
+
+def test_average_common_range_limits_span():
+    x1 = np.array([0.0, 1.0, 2.0, 3.0])
+    x2 = np.array([1.0, 2.0, 3.0])
+    xm, mean, _, warn = average_replicas(
+        [(x1, [0.0, 1.0, 2.0, 3.0]), (x2, [10.0, 20.0, 30.0])], common_range=True)
+    assert xm.min() == 1.0 and xm.max() == 3.0
+    assert np.allclose(mean, [5.5, 11.0, 16.5])
+    assert warn is None  # nothing is extrapolated in the shared span
+
+
+def test_average_common_range_no_overlap():
+    xm, mean, std, warn = average_replicas(
+        [(np.array([0.0, 1.0]), [0.0, 1.0]), (np.array([5.0, 6.0]), [5.0, 6.0])],
+        common_range=True)
+    assert xm.size == 0 and mean.size == 0
+    assert warn and "no overlapping" in warn
+
+
+def test_is_time_label():
+    assert is_time_label("Time (ps)")
+    assert is_time_label("t ps")
+    assert is_time_label("time")
+    assert is_time_label("t/ns")
+    assert is_time_label(None)  # unlabeled: GROMACS default is time
+    assert not is_time_label("Position")
+    assert not is_time_label("Frame")
+    assert not is_time_label("x (nm)")
+
+
+def test_median_dt():
+    assert median_dt([0.0, 1.0, 2.0, 3.0]) == 1.0
+    assert median_dt([0.0, 0.5, 2.0]) == 1.0
+    assert median_dt([3.0, 1.0, 2.0]) == 1.0  # order-independent
+    assert median_dt([1.0]) == 0.0
+
+
+def test_summary_stats_finite_only():
+    assert summary_stats([1.0, np.nan, 3.0]) == (1.0, 3.0, 2.0)
+    assert all(np.isnan(v) for v in summary_stats([np.inf]))
+
+
+def test_series_summary_format_and_cap():
+    s = series_summary([("RMSD", [1.0, 2.0, 3.0])])
+    assert s == "RMSD: 1–3 (mean 2)"
+    named = [(f"s{i}", [0.0]) for i in range(6)]
+    s = series_summary(named, max_series=4)
+    assert s.endswith("+2 more") and s.count(";") == 4
+    assert series_summary([]) == ""
 
 
 def test_convert_and_label():
