@@ -5,6 +5,7 @@
 | | |
 |---|---|
 | **Source** | 30 simulated panelists ([USER_PANEL.md](USER_PANEL.md)), 110 problem mentions total |
+| **Remediation** | [REMEDIATION_PLAN.md](REMEDIATION_PLAN.md) — phased fix plan covering every item below |
 | **Frequency** | = number of panelists facing the problem |
 | **Status** | Where the issue stands relative to PRD.md / SPEC.md v1: **covered** (v1 addresses it), **partial** (addressed but with a gap), **backlog** (explicitly deferred in PRD §9 / SPEC §16), **non-goal** (deliberately out of v1 scope), **gap** (not addressed anywhere in the docs) |
 
