@@ -342,8 +342,9 @@ class MainWindow(QMainWindow):
                 n_series = min(
                     len(f.datasets[self.active_ds.get(f.path, 0)].series) for f in ts)
                 for i in range(n_series):
-                    legend = ts[0].datasets[
-                        self.active_ds.get(ts[0].path, 0)].series[i].legend
+                    legend = series_label(
+                        ts[0].datasets[self.active_ds.get(ts[0].path, 0)].series[i],
+                        ts[0].y_label, n_series)
                     curves = []
                     for f in ts:
                         ds = f.datasets[self.active_ds.get(f.path, 0)]
@@ -376,7 +377,7 @@ class MainWindow(QMainWindow):
                         x = analysis.convert_x(ds.x, unit)
                         y = ds.columns[s.y_col]
                         c = colors.next()
-                        base = s.legend or f"col {s.y_col}"
+                        base = series_label(s, f.y_label, len(ds.series))
                         line = Line(
                             x, y,
                             label=f"{f.path.stem}: {base}" if multi else base,
