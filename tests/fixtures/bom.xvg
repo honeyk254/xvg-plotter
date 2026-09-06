@@ -1,0 +1,8 @@
+﻿# This file was created by GROMACS 2024.
+@    title "RMSD"
+@    xaxis label "Time (ps)"
+@    yaxis label "RMSD (nm)"
+@    s0 legend "Protein"
+0.0 0.000
+10.0 0.120
+20.0 0.150

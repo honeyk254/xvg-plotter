@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Virtual environments
+.venv*/
+venv/
+
+# Build artifacts (rebuilt via packaging/build.py; binaries ship as GitHub releases)
+build/
+dist/
+XVGPlotter.spec
+
+# Tooling workspace
+.zcode/

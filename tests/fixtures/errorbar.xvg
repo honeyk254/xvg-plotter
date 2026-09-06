@@ -1,0 +1,9 @@
+@ title "RDF"
+@ xaxis label "r (nm)"
+@ yaxis label "g(r)"
+@ s0 legend "PO4-PO4"
+@ s0 type xydy
+0.0 1.0 0.05
+0.5 1.2 0.06
+1.0 0.9 0.04
+1.5 1.1 0.05
