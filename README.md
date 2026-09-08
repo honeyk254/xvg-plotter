@@ -43,7 +43,8 @@ including overlays, replica averaging, and clipboard-ready exports for slides.
 - **Interact**: pan, zoom, home, live cursor coordinates; click a legend entry to
   show/hide a series. Style tweaks keep your zoom. Drag `.xvg` files or folders
   straight onto the window.
-- **Theme**: polished light & dark UI (Fusion + themed matplotlib canvas).
+- **Theme**: polished light & dark UI (Fusion). The plot canvas stays light
+  (publication-style) in both themes, so figures read like paper figures.
   Auto (follows the OS) / Light / Dark, remembered between runs.
 - **Export**: PNG/TIFF (DPI 100–600), PDF, SVG, EPS, transparent background — plus
   *Copy Image* straight to the clipboard for slides (rendered at the export DPI).

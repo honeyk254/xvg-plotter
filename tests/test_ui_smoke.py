@@ -422,3 +422,12 @@ def test_c07_checksums(tmp_path):
     mod._checksums([tmp_path / "missing.exe"], empty.parent)
     assert not (tmp_path / "SHA256SUMS.txt").exists() or \
         "none.txt" not in (tmp_path / "SHA256SUMS.txt").read_text(encoding="utf-8")
+
+
+def test_plot_stays_light_in_dark_mode(app):
+    from xvg_plotter.ui import theme
+    from xvg_plotter.ui.plot_canvas import PlotPanel
+    panel = PlotPanel()
+    panel.apply_theme(theme.DARK)
+    r, g, b, _ = panel.fig.get_facecolor()
+    assert (r, g, b) == (1.0, 1.0, 1.0)  # canvas stays publication-white

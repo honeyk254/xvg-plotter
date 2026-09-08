@@ -16,7 +16,7 @@ from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from .options import LEGEND_LOCS, LINE_STYLES, PALETTES  # noqa: F401  (re-exported)
-from .theme import Tokens, current
+from .theme import LIGHT, Tokens, current
 from ..core import analysis
 
 
@@ -115,6 +115,9 @@ class PlotPanel(QWidget):
         self.apply_theme(current())
 
     def apply_theme(self, t: Tokens) -> None:
+        # the plot stays publication-light in every UI theme (academia style);
+        # only the chrome (toolbar, docks) follows the dark/light setting
+        t = LIGHT
         self._tokens = t
         mpl.rcParams.update({
             "font.size": 9,
