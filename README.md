@@ -10,7 +10,7 @@ replacement for xmgrace, built with PySide6 + matplotlib.
 ![Release](https://img.shields.io/github/v/release/honeyk254/xvg-plotter)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-informational)
-![Tests](https://img.shields.io/badge/tests-52%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen)
 
 <p align="center">
   <table>
@@ -104,7 +104,6 @@ foreign global packages out of the binary:
 ```bash
 python -m venv .venv
 .venv/Scripts/pip install -e .[dev]     # Linux/macOS: .venv/bin/pip
-```
 
 # Windows (PyInstaller exe; adds an Inno Setup installer if ISCC.exe is installed)
 python packaging/build.py              # portable exe + per-user installer
