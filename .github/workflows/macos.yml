@@ -1,0 +1,59 @@
+# macOS build on GitHub Actions (PyInstaller cannot cross-compile from Windows).
+#
+# Builds XVG Plotter.app + XVGPlotter.dmg on an Apple Silicon runner for every
+# workflow_dispatch and every v* tag push; tag builds are attached to the
+# GitHub release together with SHA256SUMS.txt.
+name: macOS build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write  # release job attaches the DMG to the release
+
+jobs:
+  build:
+    # Apple Silicon build. For an Intel (x86_64) DMG, add a macos-13 job —
+    # PyInstaller produces single-arch binaries only.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Build .app + DMG
+        run: python packaging/build.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dist
+          path: |
+            dist/XVGPlotter.dmg
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-dist
+          path: dist
+
+      - name: Attach DMG + checksums to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/XVGPlotter.dmg
+            dist/SHA256SUMS.txt
+          fail_on_unmatched_files: true
