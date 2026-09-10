@@ -1,0 +1,99 @@
+# Desktop builds on GitHub Actions (PyInstaller cannot cross-compile).
+#
+# Builds the macOS DMG (Apple Silicon) and the Linux AppImage for every
+# workflow_dispatch and every v* tag push; tag builds are attached to the
+# GitHub release together with a merged SHA256SUMS.txt.
+name: Desktop builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write  # release job attaches the builds to the release
+
+jobs:
+  macos:
+    # Apple Silicon build. For an Intel (x86_64) DMG, add a macos-13 job —
+    # PyInstaller produces single-arch binaries only.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Build .app + DMG
+        run: python packaging/build.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dist
+          path: |
+            dist/XVGPlotter.dmg
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  linux:
+    # x86_64 AppImage; build.py runs appimagetool via
+    # --appimage-extract-and-run when the runner has no FUSE.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Build AppImage
+        run: python packaging/build.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-dist
+          path: |
+            dist/XVGPlotter-x86_64-*.AppImage
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-dist
+          path: dist-macos
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-dist
+          path: dist-linux
+
+      - name: Merge checksums and name the DMG after the tag
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mv "dist-macos/XVGPlotter.dmg" "dist-macos/XVGPlotter-${VER}-macos-arm64.dmg"
+          cat dist-macos/SHA256SUMS.txt dist-linux/SHA256SUMS.txt \
+            | sed "s/  XVGPlotter.dmg$/  XVGPlotter-${VER}-macos-arm64.dmg/" \
+            > SHA256SUMS.txt
+
+      - name: Attach builds to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-macos/*.dmg
+            dist-linux/*.AppImage
+            SHA256SUMS.txt
+          fail_on_unmatched_files: true

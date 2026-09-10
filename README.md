@@ -60,8 +60,13 @@ Grab `XVGPlotter.exe` from the [latest release](https://github.com/honeyk254/xvg
 
 | OS | Status |
 |---|---|
-| Windows | ✅ portable exe attached to releases |
-| macOS / Linux | build from source (PyInstaller cannot cross-compile — `python packaging/build.py` on the target OS) |
+| Windows | ✅ portable exe + installer attached to releases |
+| macOS | ✅ DMG (Apple Silicon) attached to releases — Intel Macs: build from source |
+| Linux | ✅ x86_64 AppImage attached to releases |
+
+macOS/Linux builds are produced by GitHub Actions on the target OS (PyInstaller
+cannot cross-compile); for other architectures run `python packaging/build.py`
+from source on that machine.
 
 Double-clicking an `.xvg` file (where the association is registered) opens it directly in the app;
 launching with a file argument plots it immediately.
