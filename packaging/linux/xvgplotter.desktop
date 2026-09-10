@@ -5,5 +5,5 @@ Comment=Interactive viewer for GROMACS .xvg analysis files
 Exec=XVGPlotter
 Icon=xvgplotter
 Terminal=false
-Categories=Science;Graphics;
+Categories=Graphics;
 MimeType=application/x-xvg;

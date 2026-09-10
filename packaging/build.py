@@ -178,6 +178,10 @@ def _linux(_exe: Path) -> None:
     icon_dir = appdir / "usr" / "share" / "icons" / "hicolor" / "512x512" / "apps"
     icon_dir.mkdir(parents=True, exist_ok=True)
     (icon_dir / "xvgplotter.png").write_bytes((ASSETS / "icon.png").read_bytes())
+    # appimagetool requires the icon at the AppDir root (matching Icon= in the
+    # desktop file) plus a .DirIcon entry, or it exits 1.
+    (appdir / "xvgplotter.png").write_bytes((ASSETS / "icon.png").read_bytes())
+    (appdir / ".DirIcon").symlink_to("xvgplotter.png")
     (appdir / "AppRun").symlink_to(inner / "XVGPlotter")
     tool = ROOT / "dist" / "appimagetool.AppImage"
     if not tool.exists():
