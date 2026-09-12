@@ -27,6 +27,35 @@ The audit corrected several assumptions in the problem list:
 
 ---
 
+## 0b. Re-triage after v1.0.2 (2026-09-12)
+
+v1.0.2 (shipped from a parallel session: dual folder panes, curve pins, Style-as-tab, CI)
+changed the picture for three plan items and supersedes parts of §0:
+
+- **C22 — largely covered.** Dual folder panes (independent folder bar, scanner, filter
+  and remembered folder per pane) + curve pins overlay two MD systems in one window,
+  with a "mixed X axes" warning for time-vs-frame combinations. Remaining: a literal
+  second OS window (two-monitor workflows, P09).
+- **C17 — partially mitigated.** Curve pins (right-click a legend entry) keep reference
+  curves across file/folder switches and follow the palette. Still open: colorblind-safe
+  default palette, per-series color picker, legend-overlap handling.
+- **C20 — largely covered.** The Style dock became a collapsible tab above the canvas
+  instead of a permanent right dock. Remaining: compact handling of the left
+  file/series docks on 1366×768 / 200 % scaling.
+- **C21 — the zoom half was a bug, now fixed**: the view cache keys on plotted data
+  identity, so switching files rescales while style-only changes keep zoom; both folder
+  panes restore on startup. Cross-restart session restore (checked files, styles, zoom)
+  remains open.
+- **C38 — semantics updated**: the canvas is deliberately publication-light in every UI
+  theme; only the chrome follows dark/light.
+- **CI now exists** (`.github/workflows/build.yml` builds Windows/macOS/Linux artifacts
+  and attaches them to releases) — supersedes the pre-v1.0.2 audit's "CI: NOT PRESENT"
+  finding and the PRD §3 "CI release automation" non-goal.
+- **Unchanged**: C08, C09, C11, C15, C16, C18, C19, C23, C24, C29, C30, C33, C35, C37 —
+  their plan entries stand as written.
+
+---
+
 ## Phase 0 — Release integrity & distribution (build scripts + docs, no app code)
 
 ### C07 — Publish SHA-256 checksums — **S**
@@ -161,6 +190,7 @@ The audit corrected several assumptions in the problem list:
 **Fix:** (a) `PALETTES` (`options.py:9-13`) gains **"Okabe–Ito (colorblind-safe)"** and becomes the default; (b) per-series color override: each series row in the series dock gets a color swatch button → `QColorDialog`, stored on the `Line`/overlay state so restyles keep it; "reset" returns to the cycle; (c) `LEGEND_LOCS` (`options.py:7`) gains **"outside right"** (`bbox_to_anchor=(1.02, 1), loc="upper left"`) so legends stop covering data.
 **Files:** `ui/options.py`, `ui/series_dock.py:147-177`, `ui/plot_canvas.py:138-196`, `ui/main_window.py:36-49, 322-389`.
 **Test:** offscreen — override survives a re-render; outside-right legend axes shrink correctly.
+**v1.0.2 status:** partially mitigated — curve pins shipped (pins survive file/folder switches and follow the palette). Remaining: (a) colorblind-safe palette, (b) per-series color picker, (c) legend placement outside the axes.
 
 ### C16 — Figure geometry & typography — **M**
 **Fix:** Style dock gains: width/height-inch spinboxes (persisted; "auto" = current canvas size) and a font-family combo (Match UI, DejaVu Sans, Arial/Helvetica, Times New Roman + detected CJK families). Applied via `fig.set_size_inches(..., forward=False)` and `rcParams["font.family"]`; export uses the same state so the saved figure matches the preview.
@@ -176,6 +206,7 @@ The audit corrected several assumptions in the problem list:
 **Fix:** View▸Focus Mode (F11): hide all docks; second press restores the exact prior dock state (`saveState`/`restoreState` snapshot around the toggle).
 **Files:** `ui/main_window.py` (~15 lines).
 **Test:** offscreen — toggle hides all docks; untoggle restores visibility flags.
+**v1.0.2 status:** largely covered — Style moved out of the permanent right dock into a collapsible tab above the canvas, removing the worst crowding source. A focus/compact mode for the left file+series docks remains useful on 1366×768 / 200 % scaling.
 
 ### C21 — Full session restore — **M**
 **Fix:** on close (`main_window.py:444-447`) persist: current folder, checked file paths, active file + dataset, visible series, `StyleState`/`AnalysisState`, and the canvas `xlim/ylim`. On launch, after `last_folder` load, re-check files whose paths still exist, re-apply state, restore view. Restores yesterday's comparison exactly.
@@ -186,6 +217,7 @@ The audit corrected several assumptions in the problem list:
 **Fix:** File▸"Open Folder in New Window" (`Ctrl+Shift+O`): instantiates a second `MainWindow` in the same process on the chosen folder (single-instance still guards *processes* via `single_instance.py`). Primary window owns persisted `geometry/last_folder`; secondary windows skip persisting those keys. Docks/theme state comes from the same settings.
 **Files:** `ui/main_window.py` (~40 lines), `app.py` (window list + quit handling when last window closes).
 **Test:** offscreen — open two windows with different folders; each plots its own selection independently.
+**v1.0.2 status:** largely covered — dual folder panes (independent folders, scanners, filters) + curve pins cover the overlay-two-systems workflow in one window, with a "mixed X axes" warning. Remaining: a literal second OS window for two-monitor setups.
 
 ### C23 — Decimation for interactive performance — **M**
 **Fix:** in `PlotPanel.render` (`plot_canvas.py:138-196`), when a series exceeds ~20k points, draw a min/max bucket decimation (numpy reshape + per-bucket min & max, preserving spikes) for the *interactive canvas only*; exports re-render full data (or up to a higher cap). Cursor readout and stats (C26) always use full data. Add a 1M-row generated fixture + a render-time regression test against the SPEC < 1 s click-to-plot budget.
