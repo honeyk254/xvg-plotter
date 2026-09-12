@@ -207,6 +207,11 @@ The audit corrected several assumptions in the problem list:
 **Files:** `ui/main_window.py` (~35 lines).
 **Test:** offscreen — print to a `QPrinter` in pdf mode produces a non-empty file.
 
+### C37 — Onboarding & jargon help — **M**
+**Fix:** tooltips on every control (series/style docks, export dialog, file-list columns); a one-screen, dismissable first-run intro (remembered via `settings.py`); a Help ▸ "Reading the analyses" glossary explaining common GROMACS output names (RMSD, Rg, RDF, xydy, replica) in plain language. *(Originally missing from the phase lists — flagged when the v1.0.1 open-items list was compiled.)*
+**Files:** `ui/series_dock.py`, `ui/style_dock.py`, `ui/export_dialog.py`, `ui/file_table.py`, new `ui/first_run.py` (~60 lines), `ui/main_window.py` (Help menu).
+**Test:** offscreen — intro shows on first launch, is suppressed afterwards; glossary dialog reachable from Help.
+
 ---
 
 ## Phase 3 — Larger features
@@ -255,7 +260,7 @@ The audit corrected several assumptions in the problem list:
 |---|---|---|---|
 | 0 — Release integrity & docs | C01, C03, C04, C05, C06, C07, C12 | 0.5–1 day | immediately |
 | 1 — Small code fixes | C02, C10, C13, C14, C25, C26, C27, C28, C31, C32, C34, C36, C38*, C39, C40 | 2–3 days | v1.0.1 |
-| 2 — UX features | C08, C09, C16, C17, C19, C20, C21, C22, C23, C29, C30, C33 | 4–6 days | v1.1 |
+| 2 — UX features | C08, C09, C16, C17, C19, C20, C21, C22, C23, C29, C30, C33, C37 | 5–7 days | v1.1 |
 | 3 — Larger features | C11, C15, C18, C24 | 4–6 days | v1.2 |
 | 4 — Localization | C35 | 2–3 days | v1.2 |
 

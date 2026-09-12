@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.0.2 — 2026-09-12
+
+**Fixes**
+
+- Switching the plotted file no longer keeps the previous file's axes: the
+  zoom-preservation cache now keys on the plotted data's identity (file,
+  dataset, visible series), not just the legend labels. Style-only changes
+  still keep your zoom.
+- Title/X/Y labels and the auto X-unit now follow the *active* file when
+  several files are plotted, instead of whichever row sorts first.
+- The second folder pane is restored correctly on startup.
+
+**Features**
+
+- **Two folder panes**: the Files panel is two stacked panes, each with its own
+  folder bar, refresh, filter and remembered folder — check files in either
+  pane to overlay multiple MD systems on one plot. Dropping two folders at
+  once fills both panes. The status bar warns "mixed X axes" when overlaying
+  time-based and frame-based files.
+- **Curve pins**: right-click a legend entry → *Pin curve*. Pinned curves
+  survive file and folder switches so you can overlay anything on anything;
+  View ▸ *Clear all pins* removes them. A folder refresh re-reads pinned
+  files' new data, and pins follow the current palette/line style.
+- **Style tab**: the right-side Style dock is now a collapsible "Style ▸" tab
+  above the plot — out of the way until you need it.
+
+**Tests**: 52 → 57.
+
 ## 1.0.1 — 2026-09-07
 
 Remediation release: ships Phases 0–1 of [REMEDIATION_PLAN.md](REMEDIATION_PLAN.md)

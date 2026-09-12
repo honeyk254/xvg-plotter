@@ -35,14 +35,20 @@ including overlays, replica averaging, and clipboard-ready exports for slides.
 - **Plot instantly**: click a file — title, axis labels and legend are pulled from the XVG header.
 - **Compare**: checkbox several files to overlay them; select replicas and toggle
   **Average replicas** for a mean ± SD band (with faint member curves) and an optional
-  **Common time range** so short replicas can't truncate long ones.
+  **Common time range** so short replicas can't truncate long ones. Two stacked
+  folder panes let you open two MD systems side by side and overlay files across
+  folders (a status-bar warning flags mixed time/frame X axes).
+- **Pin curves**: right-click a legend entry → *Pin curve* to keep it overlaid while
+  you plot other files or open other folders — cross-folder comparison on one figure.
+  View ▸ *Clear all pins* resets. A folder refresh re-reads pinned files' new data.
 - **Annotate**: moving-average smoothing overlay (adjustable window, with a physical-time
   hint such as "≈ 2.1 ns"), ps → ns/µs/ms time-axis conversion with relabeling (guarded to
   real time axes), log axes, grid, legend placement, color palettes,
-  line style/width, title and label overrides.
+  line style/width, title and label overrides — all in a collapsible **Style** tab
+  above the plot.
 - **Interact**: pan, zoom, home, live cursor coordinates; click a legend entry to
-  show/hide a series. Style tweaks keep your zoom. Drag `.xvg` files or folders
-  straight onto the window.
+  show/hide a series. Style tweaks keep your zoom, and switching files rescales
+  the axes. Drag `.xvg` files or folders straight onto the window.
 - **Theme**: polished light & dark UI (Fusion). The plot canvas stays light
   (publication-style) in both themes, so figures read like paper figures.
   Auto (follows the OS) / Light / Dark, remembered between runs.

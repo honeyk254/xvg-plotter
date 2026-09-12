@@ -4,7 +4,7 @@ Audience: whoever cuts a release, and IT departments deciding whether to allow
 XVG Plotter on managed machines. Product docs live in [README.md](README.md) and
 [SPEC.md](SPEC.md).
 
-## What ships (v1.0.1)
+## What ships (v1.0.2)
 
 | Artifact | Contents |
 |---|---|
@@ -52,7 +52,7 @@ Because the binaries are unsigned:
 ## Managed deployment (Windows)
 
 - **Silent install**: the Inno Setup installer supports the standard flags —
-  `XVGPlotter-Setup-1.0.1.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`
+  `XVGPlotter-Setup-1.0.2.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`
   (add `/TASKS="desktopicon assoc"` to opt into shortcuts/association; the
   `.xvg` association is off by default).
 - **Per-machine install**: use the `-machine` installer variant (installs to

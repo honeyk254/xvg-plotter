@@ -32,6 +32,9 @@ class Line:
     dy: np.ndarray | None = None
     dx: np.ndarray | None = None
     smooth: np.ndarray | None = None  # dashed overlay, excluded from legend
+    source: Path | None = None  # owning file, for pin labeling
+    ds_idx: int = -1  # dataset/series position, for pin re-snapshot on refresh
+    series_idx: int = -1
 
 
 @dataclass
@@ -52,6 +55,9 @@ class PlotState:
     grid: bool = True
     legend: str = "best"
     entries: list = field(default_factory=list)
+    # identity of the plotted data (file/dataset/series), not just its labels;
+    # lets render() tell "style change, keep zoom" from "file switched, rescale"
+    data_key: tuple = ()
 
 
 def _recolored_icon(name: str, color: str) -> QIcon | None:
@@ -95,6 +101,7 @@ class _Toolbar(NavigationToolbar2QT):
 class PlotPanel(QWidget):
     coords = Signal(str)
     save_requested = Signal()
+    pin_requested = Signal(str)  # right-click on a legend entry (label)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -109,9 +116,10 @@ class PlotPanel(QWidget):
         lay.addWidget(self.canvas)
         self.canvas.mpl_connect("motion_notify_event", self._on_motion)
         self.canvas.mpl_connect("pick_event", self._on_pick)
+        self.canvas.mpl_connect("button_press_event", self._on_button)
         self._targets: list = []
         self._last_state = PlotState()
-        self._view: tuple[frozenset[str], tuple[float, float], tuple[float, float]] | None = None
+        self._view: tuple | None = None  # (labels, data_key, xlim, ylim)
         self.apply_theme(current())
 
     def apply_theme(self, t: Tokens) -> None:
@@ -150,8 +158,10 @@ class PlotPanel(QWidget):
         t = self._tokens
         labels_now = frozenset(e.label for e in st.entries if getattr(e, "label", ""))
         # carry the current (possibly user-zoomed) view across the redraw when
-        # the plotted series set is unchanged (SPEC §6.3)
-        same_series = self._view is not None and labels_now == self._view[0]
+        # neither the labels nor the underlying data changed (SPEC §6.3) —
+        # switching files keeps its labels ("RMSD (nm)") but changes data_key
+        same_series = (self._view is not None and labels_now == self._view[0]
+                       and st.data_key == self._view[1])
         prev_ax = self.fig.axes[0] if self.fig.axes else None
         prev_xlim = prev_ax.get_xlim() if same_series and prev_ax else None
         prev_ylim = prev_ax.get_ylim() if same_series and prev_ax else None
@@ -208,7 +218,7 @@ class PlotPanel(QWidget):
                     "Trajectories (.xtc), maps (.xpm) and .edr files are not supported.",
                     transform=ax.transAxes, ha="center", va="center",
                     color=t.dim, fontsize=10)
-        self._view = (labels_now, ax.get_xlim(), ax.get_ylim())
+        self._view = (labels_now, st.data_key, ax.get_xlim(), ax.get_ylim())
         self._last_state = st
         # C34: a textual summary of what is plotted, for screen readers
         labeled = [(e.label, e.y) for e in st.entries if getattr(e, "label", "")]
@@ -222,7 +232,20 @@ class PlotPanel(QWidget):
         if ev.inaxes is not None and ev.xdata is not None:
             self.coords.emit(f"x = {ev.xdata:.6g}   y = {ev.ydata:.6g}")
 
+    def _on_button(self, ev):
+        if ev.button != 3 or not self.fig.axes:
+            return
+        leg = self.fig.axes[0].get_legend()
+        if leg is None:
+            return
+        for ln in leg.get_lines():
+            if ln.contains(ev)[0]:
+                self.pin_requested.emit(ln.get_label())
+                return
+
     def _on_pick(self, ev):
+        if ev.mouseevent.button != 1:  # left-click toggles visibility; right = pin
+            return
         lbl = ev.artist.get_label()
         if not lbl:
             return

@@ -167,6 +167,12 @@ class FileTable(QTableWidget):
             f = self.item(r, 1).data(Qt.ItemDataRole.UserRole)
             self.sync_check(f.path, f.path == path)
 
+    def uncheck_all(self) -> None:
+        for r in range(self.rowCount()):
+            f = self.item(r, 1).data(Qt.ItemDataRole.UserRole)
+            if f:
+                self.sync_check(f.path, False)
+
     def _row_of(self, path: Path) -> int | None:
         for r in range(self.rowCount()):
             f = self.item(r, 1).data(Qt.ItemDataRole.UserRole)

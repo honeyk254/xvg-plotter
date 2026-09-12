@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
+    QCursor,
     QDesktopServices,
     QGuiApplication,
     QKeySequence,
@@ -18,7 +20,10 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QLabel,
     QMainWindow,
+    QMenu,
     QMessageBox,
+    QSplitter,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -57,6 +62,24 @@ class _ColorCycle:
         return c
 
 
+@dataclass
+class PinnedCurve:
+    """Snapshot of a plotted Line so a pin survives folder switches.
+
+    `path`/`ds_idx`/`series_idx` let a folder refresh re-read the latest
+    data; averaged/derived curves have path=None and keep their snapshot.
+    """
+
+    label: str
+    path: Path | None
+    ds_idx: int
+    series_idx: int
+    x: object
+    y: object
+    dy: object
+    dx: object
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -65,59 +88,88 @@ class MainWindow(QMainWindow):
         self.active: Path | None = None
         self.active_ds: dict[Path, int] = {}
         self.visible: dict[tuple[Path, int, int], bool] = {}
-        self._scanner: FolderScanner | None = None
+        self._scanners: list[FolderScanner | None] = [None, None]
+        self._folders: list[Path | None] = [None, None]
+        self.pins: dict[str, PinnedCurve] = {}
+        self._entries: list = []
         self._pending: list[Path] = []
         self._avg_warning: str | None = None
 
         self.folder_bar = FolderBar(settings.recent_items())
         self.table = FileTable()
+        self.folder_bar2 = FolderBar(settings.recent_items())
+        self.folder_bar2.combo.lineEdit().setPlaceholderText(
+            "open a second folder to compare…")
+        self.table2 = FileTable()
+        self._bars = (self.folder_bar, self.folder_bar2)
+        self._tables = (self.table, self.table2)
         self.series = SeriesDock()
         self.style = StyleDock()
         self.panel = PlotPanel()
         self.setAcceptDrops(True)  # C13
 
-        files_widget = QWidget()
-        v = QVBoxLayout(files_widget)
-        v.setContentsMargins(theme.SP_S, theme.SP_S, theme.SP_S, 0)
-        v.setSpacing(theme.SP_S)
-        v.addWidget(self.folder_bar)
-        v.addWidget(self.table)
+        split = QSplitter(Qt.Orientation.Vertical)
+        for bar, table in zip(self._bars, self._tables):
+            pane = QWidget()
+            v = QVBoxLayout(pane)
+            v.setContentsMargins(theme.SP_S, theme.SP_S, theme.SP_S, 0)
+            v.setSpacing(theme.SP_S)
+            v.addWidget(bar)
+            v.addWidget(table)
+            split.addWidget(pane)
+        split.setSizes([420, 260])
 
         dock_files = QDockWidget("Files", self)
         dock_files.setObjectName("files")
-        dock_files.setWidget(files_widget)
+        dock_files.setWidget(split)
         dock_series = QDockWidget("Series && analysis", self)
         dock_series.setObjectName("series")
         dock_series.setWidget(self.series)
-        dock_style = QDockWidget("Style", self)
-        dock_style.setObjectName("style")
-        dock_style.setWidget(self.style)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock_files)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock_series)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock_style)
         self.splitDockWidget(dock_files, dock_series, Qt.Orientation.Vertical)
-        self.setCentralWidget(self.panel)
-        self._docks = (dock_files, dock_series, dock_style)
-        self.resizeDocks([dock_files, dock_style], [300, 220], Qt.Orientation.Horizontal)
+
+        # Style lives in a collapsible tab above the plot, not a permanent dock
+        self._style_tab = QToolButton()
+        self._style_tab.setText("Style ▸")
+        self._style_tab.setCheckable(True)
+        self._style_tab.setToolTip("Show plot style options")
+        self.style.setVisible(False)
+        self._style_tab.toggled.connect(self._toggle_style_tab)
+        central = QWidget()
+        cv = QVBoxLayout(central)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(0)
+        cv.addWidget(self._style_tab, 0, Qt.AlignmentFlag.AlignRight)
+        cv.addWidget(self.style)
+        cv.addWidget(self.panel, 1)
+        self.setCentralWidget(central)
+        self._docks = (dock_files, dock_series)
+        self.resizeDocks([dock_files], [300], Qt.Orientation.Horizontal)
         self.resizeDocks([dock_files, dock_series], [350, 280], Qt.Orientation.Vertical)
         self.resize(*DEFAULT_SIZE)
         self.setMinimumSize(*MIN_SIZE)
 
         self._menus()
 
-        self.folder_bar.folder_requested.connect(self.load_folder)
-        self.folder_bar.refresh_requested.connect(
-            lambda: self.load_folder(self.folder_bar.current_folder()))
-        self.folder_bar.filter_changed.connect(self.table.apply_filter)
-        self.folder_bar.pin_toggled.connect(self._on_pin_toggled)
-        self.table.overlay_toggled.connect(self._on_overlay)
-        self.table.file_activated.connect(self._on_activate)
+        for pane in range(2):
+            bar, table = self._bars[pane], self._tables[pane]
+            bar.folder_requested.connect(
+                lambda path, pn=pane: self.load_folder(path, pn))
+            bar.refresh_requested.connect(
+                lambda _=False, pn=pane: self.load_folder(
+                    self._bars[pn].current_folder(), pn))
+            bar.filter_changed.connect(table.apply_filter)
+            bar.pin_toggled.connect(lambda on, pn=pane: self._on_pin_toggled(on, pn))
+            table.overlay_toggled.connect(self._on_overlay)
+            table.file_activated.connect(self._on_activate)
         self.series.series_toggled.connect(self._on_series_toggled)
         self.series.dataset_changed.connect(self._on_dataset_changed)
         self.series.options_changed.connect(self.update_plot)
         self.style.style_changed.connect(self.update_plot)
         self.panel.save_requested.connect(self.export_dialog)
         self.panel.coords.connect(lambda s: self.statusBar().showMessage(s))
+        self.panel.pin_requested.connect(self._on_pin_requested)
 
         self._info = QLabel("no folder loaded")
         self.statusBar().addWidget(self._info, 1)
@@ -184,6 +236,9 @@ class MainWindow(QMainWindow):
         m_view.addSeparator()
         for d in self._docks:
             m_view.addAction(d.toggleViewAction())
+        a = QAction("Clear all pins", self)
+        a.triggered.connect(self._clear_pins)
+        m_view.addAction(a)
 
         m_help = mb.addMenu("&Help")
         a = QAction("Check for updates…", self)
@@ -265,8 +320,14 @@ class MainWindow(QMainWindow):
     def retheme(self) -> None:
         tokens = theme.apply(QApplication.instance())
         self.panel.apply_theme(tokens)
-        self.table.retheme()
-        self.folder_bar.retheme()
+        for t in self._tables:
+            t.retheme()
+        for b in self._bars:
+            b.retheme()
+
+    def _toggle_style_tab(self, on: bool) -> None:
+        self._style_tab.setText("Style ▾" if on else "Style ▸")
+        self.style.setVisible(on)
 
     def _on_system_scheme_changed(self, *_):
         if settings.theme_mode() == settings.THEME_AUTO:
@@ -274,31 +335,42 @@ class MainWindow(QMainWindow):
 
     # -- folder / files --------------------------------------------------------
 
-    def load_folder(self, path: str | Path) -> None:
+    def load_folder(self, path: str | Path, pane: int = 0) -> None:
         p = Path(str(path)).expanduser()
         if p.exists():
             p = p.resolve()
         if not p.is_dir():
             self.statusBar().showMessage(f"not a folder: {p}", 4000)
             return
-        if self._scanner is not None and self._scanner.isRunning():
-            self._scanner.stop()
-            self._scanner.wait(2000)
-        self.files.clear()
-        self.active = None
-        self.active_ds.clear()
-        self.visible.clear()
-        self.table.clear_all()
-        self.series.rebuild([], self.active_ds, self.visible, False)
-        self.folder_bar.set_path(str(p), settings.recent_items())
-        self.folder_bar.set_pinned(str(p) in settings.pinned())
+        bar, table = self._bars[pane], self._tables[pane]
+        sc = self._scanners[pane]
+        if sc is not None and sc.isRunning():
+            sc.stop()
+            sc.wait(2000)
+        old = self._folders[pane]
+        if old is not None and old != p:
+            # drop the state belonging to this pane's previous folder only;
+            # the other pane (and pins, which snapshot their data) survive
+            self.files = {k: v for k, v in self.files.items() if k.parent != old}
+            self.active_ds = {k: v for k, v in self.active_ds.items()
+                              if k.parent != old}
+            self.visible = {k: v for k, v in self.visible.items()
+                            if k[0].parent != old}
+            if self.active is not None and self.active.parent == old:
+                self.active = None
+                self.series.rebuild([], self.active_ds, self.visible, False)
+        table.clear_all()
+        bar.set_path(str(p), settings.recent_items())
+        bar.set_pinned(str(p) in settings.pinned())
         settings.add_recent(str(p))
-        settings.set_("last_folder", str(p))
+        settings.set_("last_folder" if pane == 0 else "last_folder2", str(p))
+        self._folders[pane] = p
         self._info.setText("scanning…")
-        self._scanner = FolderScanner(p)
-        self._scanner.file_parsed.connect(self._on_file)
-        self._scanner.done.connect(self._on_scan_done)
-        self._scanner.start()
+        sc = FolderScanner(p)
+        self._scanners[pane] = sc
+        sc.file_parsed.connect(lambda f, pn=pane: self._on_file(f, pn))
+        sc.done.connect(lambda pn=pane: self._on_scan_done(pn))
+        sc.start()
 
     def open_path(self, target: str) -> None:
         """Entry point for argv and second-instance launches (SPEC §10.4)."""
@@ -332,45 +404,65 @@ class MainWindow(QMainWindow):
         dirs = [p for p in paths if p.is_dir()]
         files = [p for p in paths if p.is_file() and p.suffix.lower() == ".xvg"]
         if dirs:
-            self.load_folder(dirs[0])
+            for i, d in enumerate(dirs[:2]):  # one pane per dropped folder
+                self.load_folder(d, i)
         elif files:
             self._pending = list(dict.fromkeys(files))  # dedupe, keep order
             self.load_folder(files[0].parent)
 
-    def _on_file(self, f: XvgFile) -> None:
+    def _on_file(self, f: XvgFile, pane: int = 0) -> None:
         self.files[f.path] = f
-        self.table.add_file(f)
+        self._tables[pane].add_file(f)
+        self._resnap_pins(f)
         if f.path in self._pending:
             self._pending.remove(f.path)
-            self.table.sync_check(f.path, True)
+            self._tables[pane].sync_check(f.path, True)
             if self.active is None:
                 self.active = f.path
                 self._refresh_series_dock()
                 self.update_plot()
 
-    def _on_scan_done(self) -> None:
+    def _on_scan_done(self, pane: int = 0) -> None:
         self._pending.clear()  # drop argv/drop pre-plot targets if never parsed
-        self.table.finish_scan()
-        self.table.apply_filter(self.folder_bar.filter_text())
+        table = self._tables[pane]
+        table.finish_scan()
+        table.apply_filter(self._bars[pane].filter_text())
         if self.active is not None:
             # keep the plotted summary (+ C26 stats) visible after the scan text
             self.update_plot()
             return
-        n = len(self.files)
-        w = sum(1 for f in self.files.values() if f.warnings)
-        self._info.setText(f"{n} file(s) · {w} with warnings")
+        self._info.setText(f"{table.rowCount()} file(s) · "
+                           f"{len(table._warned)} with warnings")
 
     # -- selection -------------------------------------------------------------
 
+    def _checked(self) -> list[XvgFile]:
+        seen: set[Path] = set()
+        out = []
+        for t in self._tables:
+            for f in t.ordered_checked():
+                if f.path not in seen:  # same file open in both panes → plot once
+                    seen.add(f.path)
+                    out.append(f)
+        return out
+
     def _targets(self) -> list[XvgFile]:
-        ts = self.table.ordered_checked()
+        ts = self._checked()
         if not ts and self.active is not None:
             t = self.files.get(self.active)
             ts = [t] if t else []
         return ts
 
+    def _primary(self, ts: list[XvgFile]) -> XvgFile | None:
+        """Active file drives title/labels/units when plotted, else first."""
+        if ts and self.active is not None:
+            for f in ts:
+                if f.path == self.active:
+                    return f
+        return ts[0] if ts else None
+
     def _on_overlay(self, f: XvgFile, on: bool) -> None:
-        cur = self.table.ordered_checked()
+        cur = self._checked()
         if on and self.active is None:
             self.active = f.path
         elif not on and self.active == f.path:
@@ -379,7 +471,11 @@ class MainWindow(QMainWindow):
         self.update_plot()
 
     def _on_activate(self, f: XvgFile) -> None:
-        self.table.set_checked_only(f.path)
+        for pn, t in enumerate(self._tables):
+            if self._folders[pn] == f.path.parent:
+                t.set_checked_only(f.path)
+            else:
+                t.uncheck_all()
         self.active = f.path
         self._refresh_series_dock()
         self.update_plot()
@@ -393,6 +489,64 @@ class MainWindow(QMainWindow):
         self.active_ds[f.path] = i
         self._refresh_series_dock()
         self.update_plot()
+
+    # -- curve pins (right-click a legend entry) ---------------------------------
+
+    def _on_pin_requested(self, label: str) -> None:
+        m = QMenu(self)
+        act = m.addAction("📌 Unpin curve" if label in self.pins else "📌 Pin curve")
+        act.triggered.connect(lambda: self._toggle_pin(label))
+        m.exec(QCursor.pos())
+
+    def _toggle_pin(self, label: str) -> None:
+        if label in self.pins:
+            del self.pins[label]
+            self.update_plot()
+            return
+        for e in self._entries:
+            if not isinstance(e, Line) or e.label != label:
+                continue
+            pl = label
+            if e.source is not None and not label.startswith(e.source.stem):
+                pl = f"{e.source.stem}: {label}"
+            data = (self._pin_data(e.source, e.ds_idx, e.series_idx)
+                    if e.source is not None and e.ds_idx >= 0 else None)
+            if data is not None:
+                self.pins[pl] = PinnedCurve(
+                    pl, e.source, e.ds_idx, e.series_idx, *data)
+            else:  # averaged/derived curve: keep the plotted arrays as-is
+                self.pins[pl] = PinnedCurve(pl, None, -1, -1, e.x, e.y, e.dy, e.dx)
+            break
+        self.update_plot()
+
+    def _pin_data(self, path: Path, ds_idx: int, series_idx: int):
+        """Unit-converted series data for a pin target, or None if gone."""
+        f = self.files.get(path)
+        if f is None or ds_idx >= len(f.datasets):
+            return None
+        ds = f.datasets[ds_idx]
+        if series_idx >= len(ds.series):
+            return None
+        s = ds.series[series_idx]
+        unit = self._unit(self._targets(), self.style.state().unit)
+        return (analysis.convert_x(ds.x, unit), ds.columns[s.y_col],
+                ds.columns[s.dy_col] if s.dy_col is not None else None,
+                analysis.convert_x(ds.columns[s.dx_col], unit)
+                if s.dx_col is not None else None)
+
+    def _resnap_pins(self, f: XvgFile) -> None:
+        """A folder refresh re-parses files; refresh this file's pins in place."""
+        for pin in self.pins.values():
+            if pin.path != f.path:
+                continue
+            data = self._pin_data(pin.path, pin.ds_idx, pin.series_idx)
+            if data is not None:  # structure changed → keep the old snapshot
+                pin.x, pin.y, pin.dy, pin.dx = data
+
+    def _clear_pins(self) -> None:
+        if self.pins:
+            self.pins.clear()
+            self.update_plot()
 
     def _refresh_series_dock(self) -> None:
         ts = self._targets()
@@ -418,8 +572,9 @@ class MainWindow(QMainWindow):
         if unit_mode != "auto":
             return unit_mode
         # C25: 'auto' only rescales genuine time axes, never frame indices etc.
-        if ts and ts[0].datasets and analysis.is_time_label(ts[0].x_label):
-            ds = ts[0].datasets[self.active_ds.get(ts[0].path, 0)]
+        src = self._primary(ts)
+        if src and src.datasets and analysis.is_time_label(src.x_label):
+            ds = src.datasets[self.active_ds.get(src.path, 0)]
             if ds.x.size:
                 return analysis.auto_unit(ds.x)
         return "ps"
@@ -435,15 +590,16 @@ class MainWindow(QMainWindow):
         width = sst.width
         avg_on = ast.average and self._compatible(ts)
         unit = self._unit(ts, sst.unit)
-        time_like = analysis.is_time_label(ts[0].x_label) if ts else False
+        src = self._primary(ts)
+        time_like = analysis.is_time_label(src.x_label) if src else False
 
-        if ts:
-            st.title = sst.title or ts[0].title or ts[0].path.stem
+        if src:
+            st.title = sst.title or src.title or src.path.stem
             # C25: a non-time X axis keeps its own label; no "(unit)" is appended
-            st.xlabel = sst.xlabel or (analysis.scale_label(ts[0].x_label, unit)
+            st.xlabel = sst.xlabel or (analysis.scale_label(src.x_label, unit)
                                        if time_like
-                                       else (ts[0].x_label or ""))
-            st.ylabel = sst.ylabel or (ts[0].y_label or "")
+                                       else (src.x_label or ""))
+            st.ylabel = sst.ylabel or (src.y_label or "")
 
         self._avg_warning = None
         if ts:
@@ -495,15 +651,34 @@ class MainWindow(QMainWindow):
                             dy=ds.columns[s.dy_col] if s.dy_col is not None else None,
                             # C25: x error bars follow the same unit conversion as X
                             dx=analysis.convert_x(ds.columns[s.dx_col], unit)
-                            if s.dx_col is not None else None)
+                            if s.dx_col is not None else None,
+                            source=f.path, ds_idx=ds_i, series_idx=i)
                         if ast.smooth:
                             line.smooth = analysis.moving_average(y, ast.window)
                         st.entries.append(line)
+        # pinned curves ride along on every render; skip ones already plotted.
+        # they follow the current palette/line style like live curves do
+        for pin in self.pins.values():
+            if any(isinstance(e, Line) and e.label == pin.label for e in st.entries):
+                continue
+            st.entries.append(Line(pin.x, pin.y, label=pin.label, color=colors.next(),
+                                   style=style, width=width, dy=pin.dy, dx=pin.dx))
+        key = []
+        for f in ts:
+            ds_i = self.active_ds.get(f.path, 0)
+            if ds_i >= len(f.datasets):
+                continue
+            ds = f.datasets[ds_i]
+            key.append((f.path, ds_i,
+                        tuple(i for i, s in enumerate(ds.series)
+                              if self.visible.get((f.path, ds_i, i), True))))
+        st.data_key = tuple(key)
         return st
 
     def update_plot(self, *_) -> None:
         ts = self._targets()
         st = self._compose_state(ts)
+        self._entries = st.entries
         self.panel.render(st)
         self._update_time_hint(ts)
         if ts:
@@ -514,6 +689,9 @@ class MainWindow(QMainWindow):
                 parts.append(summary)
             if self._avg_warning:
                 parts.append("⚠ " + self._avg_warning)
+            if len(ts) > 1 and len({analysis.is_time_label(f.x_label)
+                                    for f in ts}) > 1:
+                parts.append("⚠ mixed X axes (time vs other) — check units")
             self._info.setText(" · ".join(parts))
         else:
             self._info.setText("no file selected")
@@ -521,8 +699,9 @@ class MainWindow(QMainWindow):
     def _update_time_hint(self, ts: list[XvgFile]) -> None:
         """Physical span of the smoothing window on the active file (C28)."""
         txt = ""
-        if ts and ts[0].datasets and analysis.is_time_label(ts[0].x_label):
-            ds = ts[0].datasets[self.active_ds.get(ts[0].path, 0)]
+        src = self._primary(ts)
+        if src and src.datasets and analysis.is_time_label(src.x_label):
+            ds = src.datasets[self.active_ds.get(src.path, 0)]
             unit = self._unit(ts, self.style.state().unit)
             dt = analysis.median_dt(ds.x) * analysis.UNITS[unit]
             if dt > 0:
@@ -576,13 +755,14 @@ class MainWindow(QMainWindow):
 
     # -- pinning / settings files / association ----------------------------------
 
-    def _on_pin_toggled(self, on: bool) -> None:
-        cur = self.folder_bar.current_folder()
+    def _on_pin_toggled(self, on: bool, pane: int = 0) -> None:
+        bar = self._bars[pane]
+        cur = bar.current_folder()
         if not cur:
             return
         settings.toggle_pinned(cur)
-        self.folder_bar.set_pinned(cur in settings.pinned())
-        self.folder_bar.set_path(cur, settings.recent_items())
+        bar.set_pinned(cur in settings.pinned())
+        bar.set_path(cur, settings.recent_items())
 
     def _export_settings(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -600,9 +780,10 @@ class MainWindow(QMainWindow):
             return
         n = settings.import_settings(path)
         self.retheme()
-        cur = self.folder_bar.current_folder()
-        self.folder_bar.set_path(cur, settings.recent_items())
-        self.folder_bar.set_pinned(cur in settings.pinned())
+        for b in self._bars:
+            cur = b.current_folder()
+            b.set_path(cur, settings.recent_items())
+            b.set_pinned(cur in settings.pinned())
         QMessageBox.information(
             self, "Import settings",
             f"Imported {n} settings. Window layout applies after a restart.")

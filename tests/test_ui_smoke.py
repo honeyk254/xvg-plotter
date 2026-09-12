@@ -70,6 +70,130 @@ def test_render_keeps_zoom_across_style_changes(app):
     assert panel.fig.axes[0].get_xlim() != (2.0, 4.0)
 
 
+def test_render_rescales_when_data_key_changes_despite_same_labels(app):
+    """Regression: switching files kept the first file's axes (labels collide)."""
+    import numpy as np
+
+    from xvg_plotter.ui.plot_canvas import Line, PlotPanel, PlotState
+
+    panel = PlotPanel()
+    x = np.linspace(0.0, 250.0, 100)
+    st_a = PlotState(entries=[Line(x, np.sin(x), label="RMSD (nm)")],
+                     data_key=(("a", 0, (0,)),))
+    panel.render(st_a)
+    panel.fig.axes[0].set_xlim(2.0, 4.0)
+    panel.fig.axes[0].set_ylim(0.0, 0.9)
+    # same label, different file (data_key): axes must rescale to the new data
+    st_b = PlotState(entries=[Line(x * 0.1, np.cos(x) * 2, label="RMSD (nm)")],
+                     data_key=(("b", 0, (0,)),))
+    panel.render(st_b)
+    assert panel.fig.axes[0].get_xlim() != (2.0, 4.0)
+    assert panel.fig.axes[0].get_ylim() != (0.0, 0.9)
+    # same file again (same data_key): zoom is still preserved
+    panel.fig.axes[0].set_xlim(1.0, 2.0)
+    panel.render(st_b)
+    assert panel.fig.axes[0].get_xlim() == (1.0, 2.0)
+
+
+def test_style_tab_replaces_dock(app):
+    from xvg_plotter.ui.main_window import MainWindow
+
+    win = MainWindow()
+    try:
+        # the right-side Style dock is gone; a collapsible tab drives the panel
+        assert [d.objectName() for d in win._docks] == ["files", "series"]
+        assert not win.style.isVisibleTo(win)
+        win._style_tab.setChecked(True)
+        assert win.style.isVisibleTo(win)
+        win._style_tab.setChecked(False)
+        assert not win.style.isVisibleTo(win)
+    finally:
+        win.close()
+
+
+def test_pin_survives_switching_files(app, tmp_path):
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    f1 = tmp_path / "one.xvg"
+    f2 = tmp_path / "two.xvg"
+    for p, v in ((f1, 1.0), (f2, 50.0)):
+        p.write_text(f"@ title \"t\"\n@ yaxis label \"RMSD (nm)\"\n0 0\n1 {v}\n",
+                     encoding="utf-8")
+    win = MainWindow()
+    try:
+        fa = parse_file(f1)
+        fb = parse_file(f2)
+        win.files[fa.path] = fa
+        win.files[fb.path] = fb
+
+        win.active = fa.path
+        win._entries = win._compose_state([fa]).entries
+        win._toggle_pin("RMSD (nm)")  # pinned under its file-qualified label
+        assert len(win.pins) == 1
+        pin_label = next(iter(win.pins))
+        assert pin_label.startswith("one")
+
+        # switch to the other file: the pin must still be plotted
+        win.active = fb.path
+        st = win._compose_state([fb])
+        labels = [e.label for e in st.entries]
+        assert pin_label in labels
+        assert len(labels) == 2  # pin + newly plotted file
+        # a folder refresh re-parses the file and the pin follows the new data
+        f1.write_text('@ title "t"\n@ yaxis label "RMSD (nm)"\n0 0\n1 9\n',
+                      encoding="utf-8")
+        win._on_file(parse_file(f1))
+        st = win._compose_state([fb])
+        pin_entry = next(e for e in st.entries if e.label == pin_label)
+        assert pin_entry.y == pytest.approx([0.0, 9.0])
+        # pins follow the current line style instead of freezing pin-time style
+        win.style.spin_width.setValue(2.5)
+        st = win._compose_state([fb])
+        pin_entry = next(e for e in st.entries if e.label == pin_label)
+        assert pin_entry.width == 2.5
+        win.style.spin_width.setValue(1.5)
+        # unpin and it disappears
+        win._toggle_pin(pin_label)
+        st2 = win._compose_state([fb])
+        assert [e.label for e in st2.entries] == ["RMSD (nm)"]
+    finally:
+        win.close()
+
+
+def test_two_panes_overlay_folders(app, tmp_path):
+    from xvg_plotter.ui.main_window import MainWindow
+
+    d1, d2 = tmp_path / "p1", tmp_path / "p2"
+    d1.mkdir()
+    d2.mkdir()
+    f1 = d1 / "rmsd_a.xvg"
+    f2 = d2 / "rmsd_b.xvg"
+    f1.write_text("@ title \"A\"\n@ yaxis label \"RMSD (nm)\"\n0 0\n1 1\n",
+                  encoding="utf-8")
+    f2.write_text("@ title \"B\"\n@ yaxis label \"RMSD (nm)\"\n0 0\n1 2\n",
+                  encoding="utf-8")
+    win = MainWindow()
+    try:
+        win.load_folder(d1, 0)
+        win.load_folder(d2, 1)
+        _wait_for_scan(win)
+        win.table.sync_check(f1.resolve(), True)
+        win.table2.sync_check(f2.resolve(), True)
+        win._on_overlay(win.files[f1.resolve()], True)
+        ts = win._targets()
+        assert [f.path for f in ts] == [f1.resolve(), f2.resolve()]
+        st = win._compose_state(ts)
+        labels = [e.label for e in st.entries]
+        assert labels == ["rmsd_a: RMSD (nm)", "rmsd_b: RMSD (nm)"]
+        # activating a file in pane 1 is still "solo": pane 2's checks clear
+        win._on_activate(win.files[f2.resolve()])
+        assert [f.path for f in win._targets()] == [f2.resolve()]
+        assert not win.table.ordered_checked()
+    finally:
+        win.close()
+
+
 def test_series_dock_rebuild_preserves_scroll_and_syncs(app):
     from pathlib import Path
 
@@ -98,7 +222,7 @@ def _wait_for_scan(win, timeout_ms: int = 10000) -> None:
     import time
 
     waited = 0.0
-    while (win._scanner is not None and win._scanner.isRunning()
+    while (any(s is not None and s.isRunning() for s in win._scanners)
            and waited < timeout_ms / 1000):
         time.sleep(0.05)
         waited += 0.05
@@ -394,7 +518,7 @@ def test_c03_and_c05_packaging_guards():
         "xvg_build", root / "packaging" / "build.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.VERSION == "1.0.1"  # single-sourced from version.py
+    assert mod.VERSION == "1.0.2"  # single-sourced from version.py
     iss = (root / "packaging" / "windows" / "setup.iss").read_text(encoding="utf-8")
     assert "#ifdef ONEDIR" in iss and "#ifdef MACHINE" in iss
     assert "/DONEDIR" in (root / "packaging" / "build.py").read_text(encoding="utf-8")

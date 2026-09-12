@@ -6,7 +6,7 @@
 |---|---|
 | **Source** | 30 simulated panelists ([USER_PANEL.md](USER_PANEL.md)), 110 problem mentions total |
 | **Remediation** | [REMEDIATION_PLAN.md](REMEDIATION_PLAN.md) — phased fix plan covering every item below |
-| **v1.0.1** | Shipped fixes for **C01–C07, C10, C12–C14, C25–C28, C31, C32, C34, C36, C39, C40** (see [CHANGELOG.md](CHANGELOG.md)). **C38** needed no code — dark mode (Auto/Light/Dark) was already implemented in v1.0. Remaining open: C08, C09, C11, C15–C24, C29, C30, C33, C35 (Phases 2–4 of the remediation plan). |
+| **v1.0.1** | Shipped fixes for **C01–C07, C10, C12–C14, C25–C28, C31, C32, C34, C36, C39, C40** (see [CHANGELOG.md](CHANGELOG.md)). **C38** needed no code — dark mode (Auto/Light/Dark) was already implemented in v1.0. Remaining open: C08, C09, C11, C15–C24, C29, C30, C33, C35, **C37** (18 items; Phases 2–4 of the remediation plan). |
 | **Frequency** | = number of panelists facing the problem |
 | **Status** | Where the issue stands relative to PRD.md / SPEC.md v1: **covered** (v1 addresses it), **partial** (addressed but with a gap), **backlog** (explicitly deferred in PRD §9 / SPEC §16), **non-goal** (deliberately out of v1 scope), **gap** (not addressed anywhere in the docs) |
 

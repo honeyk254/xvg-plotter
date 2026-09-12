@@ -110,6 +110,9 @@ def main(argv=None) -> int:
         last = settings.get("last_folder")
         if last and Path(str(last)).is_dir():
             win.load_folder(str(last))
+        last2 = settings.get("last_folder2")
+        if last2 and Path(str(last2)).is_dir():
+            win.load_folder(str(last2), 1)
     return app.exec()
 
 
