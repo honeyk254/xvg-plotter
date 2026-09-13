@@ -172,6 +172,7 @@ Additional experience requirements:
 
 - Built-in file preview panel (sparkline) in the file list.
 - Signed/notarized macOS builds; CI-based release artifacts for all OSes.
+- Localization (a zh-CN pass was built for v1.3 and removed by decision; `tr()` wrappers remain).
 
 ---
 

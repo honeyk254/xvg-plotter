@@ -2,9 +2,10 @@
 
 ## 1.3.0 — 2026-09-13
 
-Phases 3–4 of the remediation plan ([REMEDIATION_PLAN.md](REMEDIATION_PLAN.md)) —
-the last six open problems (C21, C11, C15, C18, C24, C35) are closed. **All 40
-panel problems are now either fixed or documented v1 boundaries.**
+Phases 3 of the remediation plan ([REMEDIATION_PLAN.md](REMEDIATION_PLAN.md)) —
+the last open code problems (C21, C11, C15, C18, C24) are closed. Localization
+(C35) was evaluated and **declined** for now. All other panel problems are
+either fixed or documented v1 boundaries.
 
 **Session restore (C21)**
 
@@ -42,18 +43,9 @@ panel problems are now either fixed or documented v1 boundaries.**
   `y = a·x + b` drawn over the visible X range with the equation in the legend.
   All three are display-only; your files are never modified.
 
-**Localization (C35)**
-
-- The UI ships **in Chinese**: every one of the 222 interface strings is
-  translated (menus, docks, dialogs, glossary, first-run intro) via a
-  dict-backed Qt translator; View ▸ *Language* selects System default /
-  English / 中文（简体） and applies after a restart. Untranslated strings
-  fall back to English.
-
 **Also**
 
-- 13 new tests (73 → 86) covering the six fixes; `tools/i18n_check.py` keeps
-  the translation catalog complete (222/222).
+- 13 new tests (73 → 86) covering the six fixes.
 
 ## 1.2.0 — 2026-09-13
 

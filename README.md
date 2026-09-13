@@ -18,11 +18,12 @@ replacement for xmgrace, built with PySide6 + matplotlib.
       <td align="center"><img src="docs/screenshot-dark.png" alt="dark theme" width="420"><br><sub><b>Dark</b> — replica average ± SD, fit line, annotation</sub></td>
       <td align="center"><img src="docs/screenshot-light.png" alt="light theme" width="420"><br><sub><b>Light</b> — switch anytime from the View menu</sub></td>
     </tr>
-    <tr>
-      <td align="center"><img src="docs/screenshot-grid.png" alt="grid view" width="420"><br><sub><b>Grid view</b> — one subplot per checked file (Ctrl+G)</sub></td>
-      <td align="center"><img src="docs/screenshot-zh.png" alt="Chinese UI" width="420"><br><sub><b>中文界面</b> — View ▸ Language (System/English/中文)</sub></td>
-    </tr>
   </table>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-grid.png" alt="grid view" width="820"><br>
+  <sub><b>Grid view</b> — one subplot per checked file (Ctrl+G), here 8 files incl. a multi-dataset cell</sub>
 </p>
 
 ## Why
@@ -81,9 +82,6 @@ including overlays, replica averaging, and clipboard-ready exports for slides.
   F11 focus mode, Ctrl+Shift+E batch export, Ctrl+D CSV export, Ctrl+P print —
   Help ▸ *Keyboard shortcuts* lists them all; Help ▸ *Reading the analyses*
   explains the jargon; a one-screen intro appears on first launch.
-- **In your language**: the full UI ships in English and 中文（简体） —
-  View ▸ *Language* switches (applies after restart); untranslated strings fall
-  back to English.
 - **Native app**: own icon, single-instance (opening a second `.xvg` reuses the running
   window), pinnable recent folders, remembered window/export settings, manual
   *Check for updates*, settings export/import, live min/max/mean of plotted series.
@@ -191,7 +189,4 @@ Layout: `src/xvg_plotter/core/` (parser, models, analysis — pure Python, unit-
   a frame-index or other non-time X axis is left untouched (explicit unit picks still work).
 - A rotating log (`xvg_plotter.log`) lives in the per-user app-data folder; unexpected
   errors show a dialog with copyable details and are written there.
-- Translations live in `src/xvg_plotter/i18n/` as plain dictionaries — add strings to
-  `zh_CN.py` to extend the Chinese catalog; `python tools/i18n_check.py` verifies every
-  `tr()` string in the source is covered.
 - macOS builds are unsigned in v1 (right-click → Open on first launch).

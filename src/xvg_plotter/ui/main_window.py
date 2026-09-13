@@ -39,7 +39,6 @@ from ..core import analysis
 from ..core.models import XvgFile, series_label
 from ..core.parser import parse_file
 from ..export import copy_image, print_figure, save_figure, write_csv
-from ..i18n import LANGUAGES
 from ..version import APP_VERSION
 from . import theme
 from .export_dialog import ExportDialog
@@ -278,15 +277,6 @@ class MainWindow(QMainWindow):
             act.triggered.connect(lambda _=False, m=mode: self._set_theme_mode(m))
             group.addAction(act)
             m_theme.addAction(act)
-        m_lang = m_view.addMenu(tr("&Language"))  # C35: applied on restart
-        lang_group = QActionGroup(self)
-        for code, label in LANGUAGES.items():
-            act = QAction(self.tr(label), self)
-            act.setCheckable(True)
-            act.setChecked(settings.language() == code)
-            act.triggered.connect(lambda _=False, c=code: self._set_language(c))
-            lang_group.addAction(act)
-            m_lang.addAction(act)
         m_view.addSeparator()
         for d in self._docks:
             m_view.addAction(d.toggleViewAction())
@@ -422,13 +412,6 @@ class MainWindow(QMainWindow):
     def _toggle_style_tab(self, on: bool) -> None:
         self._style_tab.setText(f"{self.tr('Style')} " + ("▾" if on else "▸"))
         self.style.setVisible(on)
-
-    def _set_language(self, code: str) -> None:
-        """C35: stored now; constructed widgets keep their texts until restart."""
-        settings.set_language(code)
-        QMessageBox.information(self, self.tr("Restart required"),
-                                self.tr("The interface language changes after "
-                                        "a restart."))
 
     def _on_system_scheme_changed(self, *_):
         if settings.theme_mode() == settings.THEME_AUTO:

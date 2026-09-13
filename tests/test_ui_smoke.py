@@ -1137,28 +1137,3 @@ def test_c21_session_roundtrip(app, tmp_path):
             settings.set_("session", old_session)
         else:
             settings.set_("session", "")
-
-
-def test_c35_zh_cn_translation_roundtrip(app):
-    from xvg_plotter.i18n import DictTranslator, zh_CN
-    from xvg_plotter.ui.main_window import MainWindow
-
-    tr = DictTranslator(zh_CN.STRINGS, app)
-    assert app.installTranslator(tr)
-    try:
-        win = MainWindow()
-        menu_texts = [a.text() for a in win.menuBar().actions()]
-        assert any("文件" in t for t in menu_texts)
-        dock_titles = [d.windowTitle() for d in win._docks]
-        assert dock_titles == ["文件", "曲线与分析"]
-        assert win.series.chk_average.text() == "副本平均（均值 ± 标准差）"
-        assert win.series.cmb_norm.itemText(1) == "按首值"
-        win.series.cmb_norm.setCurrentIndex(1)
-        assert win.series.analysis_state().norm == "first value"  # untranslated mode
-        win.close()
-    finally:
-        app.removeTranslator(tr)
-    # after removal the very next window is English again
-    win = MainWindow()
-    assert "&File" in [a.text() for a in win.menuBar().actions()]
-    win.close()

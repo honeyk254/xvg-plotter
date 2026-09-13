@@ -281,12 +281,10 @@ changed the picture for three plan items and supersedes parts of §0:
 
 ## Phase 4 — Localization
 
-> **Shipped in v1.3.0 (2026-09-13).** Implementation note: instead of .ts/.qm +
-> pyside6-lupdate/lrelease, the zh-CN catalog lives in `i18n/zh_CN.py` as a plain
-> {English: Chinese} dict served by a small dict-backed QTranslator
-> (`i18n/__init__.py`) — same runtime behavior (tr() lookup, English fallback),
-> no Linguist toolchain needed. `tools/i18n_check.py` verifies that every tr()
-> string in the source has a translation (222/222 at ship time).
+> **Declined (2026-09-13).** A complete dict-backed zh-CN implementation was built
+> for v1.3.0 and then removed at the maintainer's decision — the app stays
+> English-only. The `tr()` string wrappers remain in place (inert, idiomatic Qt),
+> so a catalog can be added later without touching the UI code.
 
 ### C35 — i18n with a shipped zh-CN translation — **L**
 **Fix:** (a) wrap all user-facing strings in `self.tr()` / `QCoreApplication.translate` across `ui/` (mechanical pass, ~150 keys); (b) `pyside6-lupdate` / `pyside6-lrelease` steps in `build.py` producing `.qm` files bundled as package data; (c) ship `i18n/xvgplotter_zh_CN.ts` (menu, docks, dialogs, warnings); (d) language combo in settings (System/English/中文) with `QTranslator` install before `MainWindow` construction; (e) the C36 font-fallback chain (Phase 1) guarantees CJK renders in-canvas. English remains the fallback for any untranslated key.
@@ -310,7 +308,7 @@ changed the picture for three plan items and supersedes parts of §0:
 | 1 — Small code fixes | C02, C10, C13, C14, C25, C26, C27, C28, C31, C32, C34, C36, C38*, C39, C40 | 2–3 days | v1.0.1 |
 | 2 — UX features | C08, C09, C16, C17, C19, C20, C21, C22, C23, C29, C30, C33, C37 | 5–7 days | v1.1 |
 | 3 — Larger features (+ C21) | C21, C11, C15, C18, C24 | 4–6 days | v1.3 |
-| 4 — Localization | C35 | 2–3 days | v1.3 |
+| 4 — Localization | C35 | 2–3 days | declined |
 
 \* C38 = verification + docs only (already implemented).
 

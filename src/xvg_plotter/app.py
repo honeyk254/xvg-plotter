@@ -88,13 +88,6 @@ def main(argv=None) -> int:
     app.setApplicationName("XVG Plotter")
     app.setOrganizationName("XVGPlotter")
     setup_logging()  # after the app name, so AppDataLocation resolves per-app
-    # C35: install the UI translation before any window is constructed
-    from PySide6.QtCore import QLocale
-    from .i18n import install_translator
-    lang = settings.language()
-    if lang == "system":
-        lang = "zh_CN" if QLocale.system().name().startswith("zh") else "en"
-    install_translator(app, lang)
     # Fusion renders our stylesheet identically on every platform
     app.setStyle(QStyleFactory.create("Fusion"))
     from .ui import theme

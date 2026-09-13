@@ -28,15 +28,6 @@ def set_theme_mode(mode: str) -> None:
     set_("theme", mode)
 
 
-def language() -> str:
-    """UI language: "system" (follow the OS), "en", or "zh_CN" (C35)."""
-    lang = str(get("ui/language", "system"))
-    return lang if lang in ("system", "en", "zh_CN") else "system"
-
-
-def set_language(lang: str) -> None:
-    set_("ui/language", lang)
-
 
 def recents() -> list[str]:
     v = _s.value("recents", [])
