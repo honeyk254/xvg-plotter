@@ -171,7 +171,6 @@ class FileTable(QTableWidget):
                 "applied").format(n=f.stats.directives_ignored))
         if tips:
             self._warned.add(f.path)
-            name.setText("⚠ " + f.path.name)
             name.setToolTip("\n".join(tips))
             name.setForeground(QBrush(QColor(current().danger)))
 

@@ -17,12 +17,15 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import QToolButton, QVBoxLayout, QWidget
 
-from .options import LEGEND_LOCS, LINE_STYLES, PALETTES  # noqa: F401  (re-exported)
+from .options import (FONT_BASE, LEGEND_LOCS, LINE_STYLES,  # noqa: F401 (re-exported)
+                      PALETTES)
+from .icons import icon
 from .theme import LIGHT, Tokens, current
 from ..core import analysis
 
-_FONT_BASE = ["DejaVu Sans", "Microsoft YaHei", "PingFang SC",
-              "Noto Sans CJK SC", "Malgun Gothic", "Arial"]
+MPL_FONT_SIZE = 9        # rcParams base: ticks, labels, legends, annotations
+MPL_EMPTY_SIZE = 10      # empty-state hint text
+MPL_GRID_LEGEND_SIZE = 7  # small-multiple cells keep a denser legend
 DECIMATE_POINTS = 20000  # interactive cap; exports re-render with full=True (C23)
 GRID_MAX_CELLS = 24      # small-multiples cap; extra files are listed, not drawn (C18)
 
@@ -135,7 +138,9 @@ class PlotPanel(QWidget):
         self.canvas.mpl_connect("button_release_event", self._on_release)
         # C15: annotate-mode toggle lives on the plot toolbar
         self.ann_button = QToolButton(self.toolbar)
-        self.ann_button.setText(self.tr("✎ Text"))
+        self.ann_button.setText(self.tr("Text"))
+        self.ann_button.setIcon(icon("pencil"))
+        self.ann_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.ann_button.setCheckable(True)
         self.ann_button.setToolTip(self.tr(
             "Annotate: click the plot to place a text label — drag labels to "
@@ -156,9 +161,9 @@ class PlotPanel(QWidget):
         # only the chrome (toolbar, docks) follows the dark/light setting
         t = LIGHT
         self._tokens = t
-        chain = ([self._font_family] + _FONT_BASE) if self._font_family else _FONT_BASE
+        chain = ([self._font_family] + FONT_BASE) if self._font_family else FONT_BASE
         mpl.rcParams.update({
-            "font.size": 9,
+            "font.size": MPL_FONT_SIZE,
             # C36: platform CJK fonts after DejaVu keep µ Å ± ε and Chinese/
             # Japanese/Korean titles from rendering as boxes; unicode_minus
             # avoids U+2212, which several of those fonts lack.
@@ -181,7 +186,14 @@ class PlotPanel(QWidget):
         })
         self.fig.set_facecolor(t.canvas)
         self.toolbar.retheme()
+        self.ann_button.setIcon(icon("pencil"))
         self.render(self._last_state)
+
+    @staticmethod
+    def _legend_style(t: Tokens, fontsize: int) -> dict:
+        """Shared legend styling so the single-axes and grid views match."""
+        return dict(fontsize=fontsize, framealpha=0.92, facecolor=t.panel,
+                    edgecolor=t.border, borderpad=0.6, labelspacing=0.35)
 
     def set_font_family(self, family: str | None) -> None:
         """Explicit font family for plots, or None to follow the C36 chain (C16)."""
@@ -231,7 +243,7 @@ class PlotPanel(QWidget):
         self._draw_axes(ax, st, full)
         # C15: user annotations — data-coordinate text, draggable, exported too
         for x, y, txt in st.annotations:
-            artist = ax.text(x, y, txt, fontsize=9, color=t.text)
+            artist = ax.text(x, y, txt, fontsize=MPL_FONT_SIZE, color=t.text)
             try:
                 artist.set_draggable(True)
             except (AttributeError, ValueError):
@@ -244,13 +256,10 @@ class PlotPanel(QWidget):
                 if st.legend == "outside right":  # C17: figure legend reserves space
                     handles = ax.get_legend_handles_labels()[0]
                     leg = self.fig.legend(handles=handles, loc="outside right upper",
-                                          fontsize=9, framealpha=0.92,
-                                          facecolor=t.panel, edgecolor=t.border,
-                                          borderpad=0.6, labelspacing=0.35)
+                                          **self._legend_style(t, MPL_FONT_SIZE))
                 else:
-                    leg = ax.legend(loc=st.legend, fontsize=9, framealpha=0.92,
-                                    facecolor=t.panel, edgecolor=t.border,
-                                    borderpad=0.6, labelspacing=0.35)
+                    leg = ax.legend(loc=st.legend,
+                                    **self._legend_style(t, MPL_FONT_SIZE))
                 for proxy, text in zip(leg.get_lines(), leg.get_texts()):
                     proxy.set_label(text.get_text())  # pick handler matches on label
                     proxy.set_picker(True)
@@ -267,7 +276,7 @@ class PlotPanel(QWidget):
                             "Trajectories (.xtc), maps (.xpm) and .edr files are "
                             "not supported."),
                     transform=ax.transAxes, ha="center", va="center",
-                    color=t.dim, fontsize=10)
+                    color=t.dim, fontsize=MPL_EMPTY_SIZE)
         self._view = (labels_now, st.data_key, ax.get_xlim(), ax.get_ylim())
         self._last_state = st
         # C34: a textual summary of what is plotted, for screen readers
@@ -340,11 +349,10 @@ class PlotPanel(QWidget):
         for i, (cell_title, sub) in enumerate(cells):
             ax = self.fig.add_subplot(rows, cols, i + 1)
             self._draw_axes(ax, sub, full)
-            ax.set_title(cell_title or sub.title or "", fontsize=9)
+            ax.set_title(cell_title or sub.title or "", fontsize=MPL_FONT_SIZE)
             labeled = [e for e in sub.entries if getattr(e, "label", "")]
             if len(labeled) > 1:  # single-series cells don't need a legend
-                ax.legend(fontsize=7, framealpha=0.85, facecolor=t.panel,
-                          edgecolor=t.border, labelspacing=0.25)
+                ax.legend(**self._legend_style(t, MPL_GRID_LEGEND_SIZE))
         self._targets = []
         self._last_state = st
         all_named = [(e.label, e.y) for _, sub in st.grid_states

@@ -7,6 +7,14 @@ from __future__ import annotations
 LEGEND_LOCS = ["best", "upper right", "upper left", "lower left", "lower right",
                "right", "outside right", "off"]
 LINE_STYLES = {"Solid": "-", "Dashed": "--", "Points": "o"}
+
+# CJK-safe fallback chain for matplotlib (order matters, C36).
+FONT_BASE = ["DejaVu Sans", "Microsoft YaHei", "PingFang SC",
+             "Noto Sans CJK SC", "Malgun Gothic", "Arial"]
+# User-selectable plot font families ("Match UI" = follow the UI font).
+FONT_CHOICES = ["Match UI", "DejaVu Sans", "Arial", "Helvetica",
+                "Times New Roman", "Microsoft YaHei", "SimSun", "Noto Sans CJK SC"]
+
 PALETTES: dict[str, list[str] | None] = {
     # first entry = the default palette; Okabe–Ito keeps up to 8 overlaid series
     # distinguishable for colorblind readers (C17)

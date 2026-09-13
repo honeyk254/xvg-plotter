@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QToolButton,
     QVBoxLayout,
@@ -62,8 +63,8 @@ class SeriesDock(QWidget):
 
         self._inner = QWidget()
         self._vbox = QVBoxLayout(self._inner)
-        self._vbox.setContentsMargins(theme.SP_S, theme.SP_S, theme.SP_S, theme.SP_S)
-        self._vbox.setSpacing(theme.SP_S + 1)
+        self._vbox.setContentsMargins(theme.SP_M, theme.SP_M, theme.SP_M, theme.SP_M)
+        self._vbox.setSpacing(theme.SP_S)
         self._vbox.addStretch(1)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -112,17 +113,23 @@ class SeriesDock(QWidget):
         a.addWidget(self.chk_members)
         a.addWidget(self.chk_common)
         row = QHBoxLayout()
+        self.chk_smooth.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         row.addWidget(self.chk_smooth)
-        row.addWidget(QLabel(self.tr("window")))
+        lbl_window = QLabel(self.tr("window"))
+        lbl_window.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        row.addWidget(lbl_window)
+        self.spin_window.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         row.addWidget(self.spin_window)
+        self.lbl_time.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         row.addWidget(self.lbl_time)
+        row.addStretch(1)
         row2 = QHBoxLayout()
         row2.addWidget(QLabel(self.tr("Normalize")))
         row2.addWidget(self.cmb_norm, 1)
 
         opts = QGroupBox(self.tr("Analysis"))
         ov = QVBoxLayout(opts)
-        ov.setContentsMargins(theme.SP_M, theme.SP_M, theme.SP_M, theme.SP_M)
+        ov.setContentsMargins(theme.SP_S, theme.SP_S, theme.SP_S, theme.SP_S)
         ov.addLayout(a)
         ov.addLayout(row)
         ov.addLayout(row2)
@@ -209,8 +216,8 @@ class SeriesDock(QWidget):
                     colors: dict) -> _Group:
         box = QGroupBox(f.path.name)
         v = QVBoxLayout(box)
-        v.setContentsMargins(theme.SP_S, 2, theme.SP_S, 2)
-        v.setSpacing(theme.SP_S - 1)
+        v.setContentsMargins(theme.SP_S, theme.SP_XS, theme.SP_S, theme.SP_XS)
+        v.setSpacing(theme.SP_XS)
         combo = None
         if not f.datasets:
             v.addWidget(QLabel(self.tr("no data rows")))
@@ -234,7 +241,7 @@ class SeriesDock(QWidget):
             if multi_ds:  # C11: a section per dataset, all series toggleable
                 head = QLabel(self.tr("dataset {n} · {pts} pts").format(
                     n=d_i + 1, pts=len(ds.x)))
-                head.setStyleSheet("font-weight: 600;")
+                head.setProperty("role", "sectionHeading")
                 v.addWidget(head)
             for i, s in enumerate(ds.series):
                 row = QHBoxLayout()
@@ -249,7 +256,7 @@ class SeriesDock(QWidget):
                                    self._emit_toggled(f, d, i, on))
                 row.addWidget(cb, 1)
                 sw = QToolButton()
-                sw.setFixedSize(18, 18)
+                sw.setFixedSize(theme.SWATCH, theme.SWATCH)
                 sw.setToolTip(self.tr("Click to set this curve's color; right-click to "
                               "reset to the palette cycle"))
                 self._paint_swatch(sw, colors.get((f.path, d_i, i)))
@@ -267,8 +274,19 @@ class SeriesDock(QWidget):
 
     @staticmethod
     def _paint_swatch(btn: QToolButton, color: str | None) -> None:
-        btn.setStyleSheet(f"background: {color};"
-                          if color else "background: rgba(127,127,127,64);")
+        t = theme.current()
+        btn.setProperty("swatch_color", color)
+        btn.setStyleSheet(
+            f"QToolButton {{ background: {color or t.swatch_empty};"
+            f" border: 1px solid {t.border_strong};"
+            f" border-radius: {theme.R_S}px; padding: 0; }}"
+            f"QToolButton:hover {{ border-color: {t.accent}; }}")
+
+    def retheme(self) -> None:
+        """Repaint the swatch chips so border/empty fill follow the theme."""
+        for g in self._groups.values():
+            for sw in g.swatches.values():
+                self._paint_swatch(sw, sw.property("swatch_color"))
 
     def _pick_color(self, f: XvgFile, ds_i: int, i: int, sw: QToolButton) -> None:
         c = QColorDialog.getColor(

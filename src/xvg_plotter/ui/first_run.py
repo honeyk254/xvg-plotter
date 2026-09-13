@@ -36,7 +36,7 @@ class FirstRunDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Welcome to XVG Plotter"))
-        self.resize(560, 380)
+        self.resize(520, 310)
         lay = QVBoxLayout(self)
         head = QLabel(self)
         head.setTextFormat(Qt.TextFormat.RichText)

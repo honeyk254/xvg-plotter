@@ -34,7 +34,7 @@ class FolderBar(QWidget):
         self.combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.combo.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-        self.combo.setMinimumContentsLength(26)
+        self.combo.setMinimumContentsLength(14)
         self.combo.addItems(recents)
         self.combo.setToolTip(self.tr(
             "Current folder; the list holds pinned and recent folders"))
@@ -53,7 +53,8 @@ class FolderBar(QWidget):
         self.edit_filter.setPlaceholderText(self.tr("filter…"))
         self.edit_filter.setClearButtonEnabled(True)
         self.edit_filter.addAction(icon("search"), QLineEdit.ActionPosition.LeadingPosition)
-        self.edit_filter.setMaximumWidth(160)
+        self.edit_filter.setMinimumWidth(112)
+        self.edit_filter.setMaximumWidth(200)
         self.edit_filter.setToolTip(self.tr(
             "Filter the list by file name or title (Ctrl+F; Esc clears)"))
         self.edit_filter.installEventFilter(self)  # Esc clears (C19)

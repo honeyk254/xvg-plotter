@@ -56,7 +56,7 @@ GLOSSARY = [
                                    "draws a dashed least-squares y = a·x + b over the "
                                    "visible range. Display-only — your files are "
                                    "never changed."),
-    ("annotation", "Click ✎ Text on the plot toolbar, then click the canvas to place a "
+    ("annotation", "Click Text on the plot toolbar, then click the canvas to place a "
                    "text label at that data point. Drag labels to move them; they are "
                    "kept in exports and prints. View ▸ Clear annotations removes all."),
     ("grid view", "View ▸ Grid view of checked files (Ctrl+G) draws each checked file "
@@ -65,25 +65,6 @@ GLOSSARY = [
                 "every dataset's series in the Series panel; tick any of them, also "
                 "across files, to overlay."),
 ]
-
-_INTRO = (
-    "<h3>Welcome to XVG Plotter</h3>"
-    "<p>The fast way from GROMACS <code>.xvg</code> files to publication figures:</p>"
-    "<ul>"
-    "<li><b>Open a folder</b> — every analysis file is listed with title, series and "
-    "points; tick <b>subfolders</b> for nested trees.</li>"
-    "<li><b>Click a file</b> to plot it; <b>tick several</b> to overlay them. The two "
-    "file panes can hold <b>two different folders</b> for comparisons.</li>"
-    "<li><b>Right-click a legend entry</b> to <b>pin</b> a curve — it survives file "
-    "and folder switches.</li>"
-    "<li><b>Average replicas</b> in the Series panel, rescale time in the Style "
-    "options, then <b>Export</b> (PNG/TIFF/PDF/SVG/EPS), <b>print</b>, or <b>copy</b> "
-    "straight into slides.</li>"
-    "</ul>"
-    "<p>Help ▸ <i>Reading the analyses</i> explains the jargon; Help ▸ <i>Keyboard "
-    "shortcuts</i> lists every shortcut.</p>"
-)
-
 
 class _InfoDialog(QDialog):
     def __init__(self, title: str, parent=None, width: int = 520, height: int = 420):
@@ -111,7 +92,6 @@ class KeyboardDialog(_InfoDialog):
         table.setHorizontalHeaderLabels([self.tr("Shortcut"), self.tr("Action")])
         for r, (seq, action) in enumerate(KEYBOARD_ROWS):
             seq_item = QTableWidgetItem(seq)
-            seq_item.setFont(self.font())
             table.setItem(r, 0, seq_item)
             table.setItem(r, 1, QTableWidgetItem(self.tr(action)))
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)

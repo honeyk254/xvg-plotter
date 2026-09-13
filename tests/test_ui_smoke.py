@@ -519,7 +519,7 @@ def test_c03_and_c05_packaging_guards():
         "xvg_build", root / "packaging" / "build.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.VERSION == "1.3.0"  # single-sourced from version.py
+    assert mod.VERSION == "1.4.0"  # single-sourced from version.py
     iss = (root / "packaging" / "windows" / "setup.iss").read_text(encoding="utf-8")
     assert "#ifdef ONEDIR" in iss and "#ifdef MACHINE" in iss
     assert "/DONEDIR" in (root / "packaging" / "build.py").read_text(encoding="utf-8")

@@ -45,7 +45,7 @@ class ExportDialog(QDialog):
 
         form = QFormLayout()
         form.setContentsMargins(theme.SP_L, theme.SP_L, theme.SP_L, theme.SP_L)
-        form.setSpacing(theme.SP_S + 1)
+        form.setSpacing(theme.SP_S)
         form.addRow(self.tr("Filename"), self.ed_name)
         dirrow = QHBoxLayout()
         dirrow.setSpacing(theme.SP_S)

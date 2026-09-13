@@ -10,12 +10,12 @@ replacement for xmgrace, built with PySide6 + matplotlib.
 ![Release](https://img.shields.io/github/v/release/honeyk254/xvg-plotter)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-informational)
-![Tests](https://img.shields.io/badge/tests-86%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-85%20passing-brightgreen)
 
 <p align="center">
   <table>
     <tr>
-      <td align="center"><img src="docs/screenshot-dark.png" alt="dark theme" width="420"><br><sub><b>Dark</b> — replica average ± SD, fit line, annotation</sub></td>
+      <td align="center"><img src="docs/screenshot-dark.png" alt="dark theme" width="420"><br><sub><b>Dark</b> — multi-file overlay with fit line and annotation</sub></td>
       <td align="center"><img src="docs/screenshot-light.png" alt="light theme" width="420"><br><sub><b>Light</b> — switch anytime from the View menu</sub></td>
     </tr>
   </table>
@@ -23,7 +23,7 @@ replacement for xmgrace, built with PySide6 + matplotlib.
 
 <p align="center">
   <img src="docs/screenshot-grid.png" alt="grid view" width="820"><br>
-  <sub><b>Grid view</b> — one subplot per checked file (Ctrl+G), here 8 files incl. a multi-dataset cell</sub>
+  <sub><b>Grid view</b> — one subplot per checked file (Ctrl+G)</sub>
 </p>
 
 ## Why

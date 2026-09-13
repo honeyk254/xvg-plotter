@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.4.0 — 2026-09-13
+
+Visual-polish release: every spacing, corner and control metric now comes
+from one token system, verified screen-by-screen in both themes by an
+independent visual-review pass (18 screenshots, `tools/capture_screens.py`).
+
+**Design tokens**
+
+- New spacing scale (2/4/8/12/16 px), radius scale (4/6/8 px) and shared
+  control metrics: buttons, inputs, combos and spinboxes are pixel-identical
+  in a row — the folder bar's "Open Folder…" button and path combo line up.
+- Every hardcoded QSS offset and layout fudge (`SP_S + 1`, bare `2`…) moved
+  onto the scale; both docks share one gutter rule; the file panes get
+  symmetric margins; the smooth-overlay row packs without a dead gap.
+- Dark theme surfaces re-stepped so panel/canvas/hover layers read as depth.
+
+**Corners**
+
+- Radius tokens replace the five ad-hoc values; table header top corners are
+  radius-matched to the rounded table frame (no more square header overhang).
+- Series color swatches are bordered, rounded chips with hover feedback and a
+  theme-aware empty fill; the splitter handle highlights on hover.
+
+**Consistency**
+
+- Emoji glyphs (📌 ✎ ▸ ▾ ⚠) replaced with themed Feather-style SVG icons
+  (pin, pencil, chevrons); warnings keep their danger color.
+- Matplotlib legends share one style across the single-axes and grid views;
+  plot font sizes are centralized; the font list and welcome text each have a
+  single source.
+- First-run dialog sized to its content; disabled checkbox borders lifted for
+  dark-mode visibility; folder-bar filter keeps a usable width on narrow docks.
+
 ## 1.3.0 — 2026-09-13
 
 Phases 3 of the remediation plan ([REMEDIATION_PLAN.md](REMEDIATION_PLAN.md)) —

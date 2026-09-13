@@ -17,10 +17,7 @@ from PySide6.QtWidgets import (
 
 from .. import settings
 from . import theme
-from .options import LEGEND_LOCS, LINE_STYLES, PALETTES
-
-FONTS = ["Match UI", "DejaVu Sans", "Arial", "Helvetica", "Times New Roman",
-         "Microsoft YaHei", "SimSun", "Noto Sans CJK SC"]
+from .options import FONT_CHOICES, LEGEND_LOCS, LINE_STYLES, PALETTES
 
 
 @dataclass
@@ -95,13 +92,13 @@ class StyleDock(QWidget):
         self.spin_figh.setValue(float(settings.get("view/fig_h", 0.0) or 0.0))
         self.spin_figh.setToolTip(self.tr("Figure height in inches (auto = fill the window)"))
         self.cmb_font = QComboBox()
-        self.cmb_font.addItems(FONTS)
+        self.cmb_font.addItems(FONT_CHOICES)
         self.cmb_font.setCurrentText(str(settings.get("view/font", "Match UI")))
         self.cmb_font.setToolTip(self.tr("Font family for titles, labels and ticks"))
 
         form = QFormLayout()
         form.setContentsMargins(theme.SP_M, theme.SP_M, theme.SP_M, theme.SP_M)
-        form.setSpacing(theme.SP_S + 1)
+        form.setSpacing(theme.SP_S)
         form.addRow(self.tr("Grid"), self.chk_grid)
         form.addRow(self.tr("Log X"), self.chk_logx)
         form.addRow(self.tr("Log Y"), self.chk_logy)

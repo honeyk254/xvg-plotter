@@ -1,8 +1,9 @@
 """Theme tokens + application stylesheet (SPEC §6.1).
 
 Single source for every visual constant in the UI: color tokens (light/dark),
-spacing constants, and the QSS that styles all widgets.  The mode is stored in
-QSettings ("auto" | "light" | "dark"); "auto" follows the OS color scheme.
+spacing/radius/control-metric constants, and the QSS that styles all widgets.
+The mode is stored in QSettings ("auto" | "light" | "dark"); "auto" follows
+the OS color scheme.
 """
 from __future__ import annotations
 
@@ -15,8 +16,27 @@ from PySide6.QtWidgets import QApplication
 
 from .. import settings
 
-# Spacing / margin scale (px) shared by all widgets.
-SP_S, SP_M, SP_L = 4, 8, 12
+# Spacing / margin scale (px) shared by all widgets.  No layout code may use
+# a value that is not on this scale.
+SP_XS, SP_S, SP_M, SP_L, SP_XL = 2, 4, 8, 12, 16
+
+# Corner-radius scale (px): small controls (checkbox, scrollbar handle),
+# controls & popups (buttons, inputs, menus), containers (panels, tables).
+R_S, R_M, R_L = 4, 6, 8
+
+# Control metrics: every boxed control (button, input, combo, spin) shares
+# these so a row of mixed controls is pixel-aligned.  QSS min-height excludes
+# padding and borders: CTRL_MIN_H + 2*CTRL_PAD_V + 2*1 = 28 px on screen.
+CTRL_MIN_H = 18
+CTRL_PAD_V = 4
+CTRL_PAD_H = 10
+
+# Room reserved above a QGroupBox frame for its 8 pt title (title fix, 1.0.x).
+GROUP_TITLE_TOP = 17
+# Size of the series-dock color swatch chips.
+SWATCH = 18
+# Menu-item accelerator gutter (kept wide so shortcut columns align).
+MENU_GUTTER = 24
 
 _ASSETS = Path(__file__).resolve().parents[1] / "assets"
 
@@ -44,6 +64,7 @@ class Tokens:
     selection: str
     on_selection: str
     grid: str            # matplotlib grid lines
+    swatch_empty: str    # series color chip before a color is picked
 
 
 LIGHT = Tokens(
@@ -56,18 +77,20 @@ LIGHT = Tokens(
     danger="#c0392b",
     selection="#dbe6fd", on_selection="#12233f",
     grid="#d4d7dd",
+    swatch_empty="#cfd4db",
 )
 
 DARK = Tokens(
     name="dark",
-    window="#1b1c20", panel="#25262c", canvas="#202126", alt="#222329",
-    hover="#2c2d34",
+    window="#1b1c20", panel="#282a31", canvas="#1f2126", alt="#24262d",
+    hover="#33353d",
     text="#e8e9ec", dim="#9aa0ab",
     accent="#5b8cff", accent_hover="#729eff", on_accent="#0d1424",
     border="#34363e", border_strong="#4a4d57",
     danger="#e06c5b",
     selection="#2c3b5e", on_selection="#dbe6fd",
     grid="#3a3d46",
+    swatch_empty="#3f434c",
 )
 
 _active = LIGHT
@@ -125,49 +148,53 @@ def apply(app: QApplication | None = None, tokens: Tokens | None = None) -> Toke
 
 
 def stylesheet(t: Tokens) -> str:
+    ctrl = (f"padding: {CTRL_PAD_V}px {CTRL_PAD_H}px; "
+            f"min-height: {CTRL_MIN_H}px;")
     return f"""
 QWidget {{ font-size: 10pt; }}
 
 QMainWindow, QDialog {{ background: {t.window}; }}
 QLabel {{ background: transparent; }}
+QLabel[role="sectionHeading"] {{ font-weight: 600; }}
 
 QMenuBar {{
     background: {t.window}; color: {t.text};
     border-bottom: 1px solid {t.border};
 }}
-QMenuBar::item {{ padding: 4px 9px; border-radius: 4px; background: transparent; }}
+QMenuBar::item {{ padding: {SP_S}px {SP_M}px; border-radius: {R_S}px; background: transparent; }}
 QMenuBar::item:selected {{ background: {t.selection}; color: {t.on_selection}; }}
 
 QMenu {{
     background: {t.panel}; color: {t.text};
-    border: 1px solid {t.border}; border-radius: 6px; padding: 4px;
+    border: 1px solid {t.border}; border-radius: {R_M}px; padding: {SP_S}px;
 }}
-QMenu::item {{ padding: 5px 24px 5px 10px; border-radius: 4px; background: transparent; }}
+QMenu::item {{ padding: {SP_S}px {MENU_GUTTER}px {SP_S}px {SP_M}px; border-radius: {R_S}px; background: transparent; }}
 QMenu::item:selected {{ background: {t.selection}; color: {t.on_selection}; }}
 QMenu::item:disabled {{ color: {t.dim}; }}
-QMenu::separator {{ height: 1px; background: {t.border}; margin: 4px 8px; }}
+QMenu::separator {{ height: 1px; background: {t.border}; margin: {SP_S}px {SP_M}px; }}
 
 QToolBar {{
     background: {t.panel}; border: none;
     border-bottom: 1px solid {t.border};
-    padding: 3px; spacing: 2px;
+    padding: {SP_S}px; spacing: {SP_XS}px;
 }}
-QToolBar::separator {{ background: {t.border}; width: 1px; margin: 4px 3px; }}
+QToolBar::separator {{ background: {t.border}; width: 1px; margin: {SP_S}px {SP_XS}px; }}
 QToolButton {{
-    background: transparent; border: none; border-radius: 4px; padding: 3px;
+    background: transparent; border: none; border-radius: {R_S}px; padding: {SP_S}px;
 }}
 QToolButton:hover {{ background: {t.hover}; }}
 QToolButton:pressed, QToolButton:checked {{ background: {t.selection}; color: {t.on_selection}; }}
-QToolBar QLabel {{ background: transparent; color: {t.text}; padding-right: 6px; }}
+QToolBar QLabel {{ background: transparent; color: {t.text}; padding-right: {SP_S}px; }}
 
 QPushButton {{
     background: {t.panel}; color: {t.text};
-    border: 1px solid {t.border_strong}; border-radius: 5px;
-    padding: 5px 12px; min-height: 14px;
+    border: 1px solid {t.border_strong}; border-radius: {R_M}px;
+    {ctrl}
 }}
 QPushButton:hover {{ background: {t.hover}; }}
 QPushButton:pressed {{ background: {t.border}; }}
 QPushButton:disabled {{ color: {t.dim}; border-color: {t.border}; }}
+QPushButton:focus {{ border-color: {t.accent}; }}
 QPushButton:default {{
     background: {t.accent}; color: {t.on_accent};
     border-color: {t.accent}; font-weight: 600;
@@ -177,8 +204,8 @@ QPushButton:default:pressed {{ background: {t.accent}; }}
 
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
     background: {t.panel}; color: {t.text};
-    border: 1px solid {t.border_strong}; border-radius: 5px;
-    padding: 4px 8px;
+    border: 1px solid {t.border_strong}; border-radius: {R_M}px;
+    {ctrl}
     selection-background-color: {t.selection}; selection-color: {t.on_selection};
 }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{
@@ -192,15 +219,15 @@ QComboBox::drop-down {{ border: none; width: 18px; }}
 QComboBox::down-arrow {{ image: url({_asset("arrow-down.svg")}); width: 10px; height: 10px; }}
 QComboBox QAbstractItemView {{
     background: {t.panel}; color: {t.text};
-    border: 1px solid {t.border}; border-radius: 4px;
+    border: 1px solid {t.border}; border-radius: {R_M}px;
     selection-background-color: {t.selection}; selection-color: {t.on_selection};
 }}
 
-QCheckBox {{ background: transparent; spacing: 6px; }}
+QCheckBox {{ background: transparent; spacing: {SP_M}px; }}
 QCheckBox:disabled {{ color: {t.dim}; }}
 QCheckBox::indicator {{
-    width: 15px; height: 15px;
-    border: 1px solid {t.border_strong}; border-radius: 3px;
+    width: 16px; height: 16px;
+    border: 1px solid {t.border_strong}; border-radius: {R_S}px;
     background: {t.panel};
 }}
 QCheckBox::indicator:hover {{ border-color: {t.accent}; }}
@@ -212,33 +239,34 @@ QCheckBox::indicator:disabled {{ background: {t.window}; border-color: {t.border
 
 QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {{
-    background: transparent; border: none; width: 16px;
+    background: transparent; border: none; width: 18px;
 }}
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
 QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
-    background: {t.hover}; border-radius: 3px;
+    background: {t.hover}; border-radius: {R_S}px;
 }}
 QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
-    image: url({_asset("arrow-up.svg")}); width: 8px; height: 8px;
+    image: url({_asset("arrow-up.svg")}); width: 10px; height: 10px;
 }}
 QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
-    image: url({_asset("arrow-down.svg")}); width: 8px; height: 8px;
+    image: url({_asset("arrow-down.svg")}); width: 10px; height: 10px;
 }}
 
 QGroupBox {{
     background: {t.panel};
-    border: 1px solid {t.border}; border-radius: 7px;
-    margin-top: 17px; padding: 9px 8px 9px 8px;
+    border: 1px solid {t.border}; border-radius: {R_L}px;
+    margin-top: {GROUP_TITLE_TOP}px; padding: {SP_M}px {SP_S}px {SP_M}px {SP_S}px;
     font-weight: 600;
 }}
 QGroupBox::title {{
     subcontrol-origin: margin; subcontrol-position: top left;
-    left: 9px; top: 1px; padding: 0 3px;
+    left: {SP_M}px; top: 1px; padding: 0 {SP_XS}px;
     color: {t.dim}; font-size: 8pt; font-weight: 700; letter-spacing: 0.5px;
 }}
 
 QDockWidget::title {{
-    background: {t.window}; color: {t.text}; padding: 6px 10px 5px;
+    background: {t.window}; color: {t.text};
+    padding: {SP_S}px {SP_M}px;
     border-bottom: 1px solid {t.border};
     font-weight: 600;
 }}
@@ -246,34 +274,39 @@ QDockWidget::title {{
 QTableWidget {{
     background: {t.panel}; alternate-background-color: {t.alt};
     gridline-color: {t.border};
-    border: 1px solid {t.border}; border-radius: 7px;
+    border: 1px solid {t.border}; border-radius: {R_L}px;
     selection-background-color: {t.selection}; selection-color: {t.on_selection};
 }}
-QTableWidget::item {{ padding: 2px 4px; }}
+QTableWidget::item {{ padding: {SP_XS}px {SP_S}px; }}
 QTableWidget::item:selected {{ background: {t.selection}; color: {t.on_selection}; }}
 QHeaderView::section {{
     background: {t.window}; color: {t.dim};
     border: none; border-bottom: 1px solid {t.border};
-    padding: 5px 6px; font-size: 9pt; font-weight: 600;
+    padding: {SP_S}px {SP_M}px; font-size: 9pt; font-weight: 600;
 }}
+QHeaderView::section:first {{ border-top-left-radius: {R_L}px; }}
+QHeaderView::section:last {{ border-top-right-radius: {R_L}px; }}
 
 QScrollArea {{ background: transparent; border: none; }}
 QScrollArea > QWidget > QWidget {{ background: transparent; }}
 
-QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
+QScrollBar:vertical {{ background: transparent; width: 10px; margin: {SP_XS}px; }}
 QScrollBar::handle:vertical {{
-    background: {t.border_strong}; border-radius: 4px; min-height: 24px;
+    background: {t.border_strong}; border-radius: {R_S}px; min-height: 24px;
 }}
 QScrollBar::handle:vertical:hover {{ background: {t.dim}; }}
-QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
+QScrollBar:horizontal {{ background: transparent; height: 10px; margin: {SP_XS}px; }}
 QScrollBar::handle:horizontal {{
-    background: {t.border_strong}; border-radius: 4px; min-width: 24px;
+    background: {t.border_strong}; border-radius: {R_S}px; min-width: 24px;
 }}
 QScrollBar::handle:horizontal:hover {{ background: {t.dim}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 
 QSplitter::handle {{ background: {t.window}; }}
+QSplitter::handle:hover {{ background: {t.border}; }}
+QSplitter::handle:horizontal {{ width: 5px; }}
+QSplitter::handle:vertical {{ height: 5px; }}
 
 QStatusBar {{
     background: {t.window};
@@ -284,7 +317,7 @@ QStatusBar QLabel {{ color: {t.dim}; }}
 
 QToolTip {{
     background: {t.panel}; color: {t.text};
-    border: 1px solid {t.border_strong}; border-radius: 4px;
-    padding: 4px 8px;
+    border: 1px solid {t.border_strong}; border-radius: {R_S}px;
+    padding: {SP_S}px {SP_M}px;
 }}
 """

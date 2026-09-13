@@ -45,6 +45,7 @@ from .export_dialog import ExportDialog
 from .file_table import FileTable, FolderScanner
 from .folder_bar import FolderBar
 from .help_dialogs import GlossaryDialog, KeyboardDialog
+from .icons import icon
 from .options import LINE_STYLES, PALETTES
 from .series_dock import NORMALIZE_MODES
 from .plot_canvas import GRID_MAX_CELLS, Band, Line, PlotPanel, PlotState
@@ -135,7 +136,7 @@ class MainWindow(QMainWindow):
         for bar, table in zip(self._bars, self._tables):
             pane = QWidget()
             v = QVBoxLayout(pane)
-            v.setContentsMargins(theme.SP_S, theme.SP_S, theme.SP_S, 0)
+            v.setContentsMargins(theme.SP_S, theme.SP_S, theme.SP_S, theme.SP_S)
             v.setSpacing(theme.SP_S)
             v.addWidget(bar)
             v.addWidget(table)
@@ -154,7 +155,9 @@ class MainWindow(QMainWindow):
 
         # Style lives in a collapsible tab above the plot, not a permanent dock
         self._style_tab = QToolButton()
-        self._style_tab.setText(self.tr("Style") + " ▸")
+        self._style_tab.setText(self.tr("Style"))
+        self._style_tab.setIcon(icon("chevron-right"))
+        self._style_tab.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self._style_tab.setCheckable(True)
         self._style_tab.setToolTip(self.tr("Show plot style options"))
         self.style.setVisible(False)
@@ -408,9 +411,13 @@ class MainWindow(QMainWindow):
             t.retheme()
         for b in self._bars:
             b.retheme()
+        self.series.retheme()
+        self._style_tab.setIcon(
+            icon("chevron-down" if self._style_tab.isChecked()
+                 else "chevron-right"))
 
     def _toggle_style_tab(self, on: bool) -> None:
-        self._style_tab.setText(f"{self.tr('Style')} " + ("▾" if on else "▸"))
+        self._style_tab.setIcon(icon("chevron-down" if on else "chevron-right"))
         self.style.setVisible(on)
 
     def _on_system_scheme_changed(self, *_):
@@ -598,8 +605,9 @@ class MainWindow(QMainWindow):
 
     def _on_pin_requested(self, label: str) -> None:
         m = QMenu(self)
-        act = m.addAction(self.tr("📌 Unpin curve") if label in self.pins
-                          else self.tr("📌 Pin curve"))
+        act = m.addAction(icon("pin"),
+                          self.tr("Unpin curve") if label in self.pins
+                          else self.tr("Pin curve"))
         act.triggered.connect(lambda: self._toggle_pin(label))
         m.exec(QCursor.pos())
 
@@ -883,7 +891,7 @@ class MainWindow(QMainWindow):
                     n=len(st.grid_states))]
                 if self._grid_overflow:
                     parts.append(self.tr(
-                        "⚠ {n} more file(s) beyond the {cap}-panel cap — narrow "
+                        "{n} more file(s) beyond the {cap}-panel cap — narrow "
                         "the selection").format(n=self._grid_overflow,
                                                 cap=GRID_MAX_CELLS))
             else:
@@ -894,10 +902,10 @@ class MainWindow(QMainWindow):
             if summary:
                 parts.append(summary)
             if self._avg_warning:
-                parts.append("⚠ " + self._avg_warning)
+                parts.append(self._avg_warning)
             if len(ts) > 1 and len({analysis.is_time_label(f.x_label)
                                     for f in ts}) > 1:
-                parts.append(self.tr("⚠ mixed X axes (time vs other) — check units"))
+                parts.append(self.tr("mixed X axes (time vs other) — check units"))
             self._info.setText(" · ".join(parts))
         else:
             self._info.setText(self.tr("no file selected"))
