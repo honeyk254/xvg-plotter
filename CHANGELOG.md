@@ -1,5 +1,67 @@
 # Changelog
 
+## 1.2.0 — 2026-09-13
+
+Phase 2 of the remediation plan ([REMEDIATION_PLAN.md](REMEDIATION_PLAN.md)) — all
+remaining "fully open" Phase 2 problems plus the v1.0.2 partials, closed.
+
+**Series readability (C17 — now fully closed)**
+
+- **Okabe–Ito** becomes the default color palette: up to 8 overlaid series stay
+  distinguishable for colorblind readers ("Default" matplotlib cycle remains available).
+- **Per-series color picker**: a color swatch next to every series in the Series panel;
+  click to choose a color, right-click to reset to the palette cycle. Overrides survive
+  restyles.
+- **Legend: outside right** — the legend moves out of the plot area (constrained-layout
+  reserves its space), so it stops covering data.
+
+**Performance (C23)**
+
+- Series above 20,000 points are drawn with **min/max bucket decimation** on the
+  interactive canvas — spikes survive, multi-million-point files stop lagging.
+  Exports, prints and clipboard copies re-render with **full data**.
+
+**Files & folders (C08, C09)**
+
+- **Subfolder scan**: a per-pane "subfolders" toggle walks the whole tree (hidden and
+  dotted directories are skipped), so nested analysis folders appear in one list.
+- **Cloud-safe scanning**: OneDrive/Dropbox placeholders are listed with a
+  "cloud-only" warning **without triggering a download**; selecting one fetches just
+  that file.
+
+**Publication figures (C16)**
+
+- **Fig size (in)**: exact width x height in inches — exports and prints honor the
+  exact size (tight cropping is skipped when a size is set).
+- **Font family**: pick the plot font (Arial, Times, DejaVu, CJK families...);
+  remembered between launches.
+
+**Export & output (C29, C30, C33)**
+
+- **Export all checked files...** (Ctrl+Shift+E): every checked file becomes its own
+  plot in a chosen folder, with a progress dialog and cancel.
+- **Export data (CSV)...** (Ctrl+D): the plotted numbers - visible series with
+  ±/dx columns, or mean ± SD when averaging - honoring the current unit conversion.
+- **Print...** (Ctrl+P): prints at the printer's resolution, centered and
+  aspect-correct.
+
+**Workflow (C19, C20, C22)**
+
+- **Keyboard**: Ctrl+F jumps to the folder filter (Esc clears), Ctrl+1/2/3 toggle the
+  Files/Series/Style panels, Ctrl+R refreshes both panes - and Help > *Keyboard
+  shortcuts* lists everything.
+- **Focus mode** (F11): one keypress hides every panel, leaving only the plot.
+- **Open Folder in New Window...** (Ctrl+Shift+O): a real second window for
+  two-monitor setups; only the primary window persists layout state.
+
+**Onboarding (C37)**
+
+- A one-screen **welcome intro** on first launch; Help > *Reading the analyses*
+  explains RMSD, Rg, RDF, xydy, replicas and pins in plain language; tooltips on the
+  analysis and style controls.
+
+**Tests**: 57 -> 73. Fixes tracked in [PROBLEM_LIST.md](PROBLEM_LIST.md).
+
 ## 1.0.2 — 2026-09-12
 
 **Fixes**

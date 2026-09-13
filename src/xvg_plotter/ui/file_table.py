@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,34 @@ from .theme import current
 
 COLS = ["", "Name", "Title", "Series", "Points", "Size", "Modified"]
 
+# Windows cloud placeholder attributes: reading the file would trigger a full
+# download of every file in the folder during the scan (C09).
+_FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000
+_FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x40000
+
+CLOUD_WARNING = ("cloud-only placeholder — selecting it downloads the file "
+                 "(OneDrive/Dropbox)")
+
+
+def is_cloud_placeholder(path: Path) -> bool:
+    """True when the file is a cloud-storage placeholder not yet on disk (C09)."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+        attrs = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+    except Exception:
+        return False
+    if attrs == -1:  # INVALID_FILE_ATTRIBUTES: let the parser report the problem
+        return False
+    return bool(attrs & (_FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+                         | _FILE_ATTRIBUTE_RECALL_ON_OPEN))
+
+
+def placeholder_file(path: Path) -> XvgFile:
+    """Header-less stub so the scan lists a placeholder without hydrating it."""
+    return XvgFile(path=path, warnings=[CLOUD_WARNING])
+
 
 def _human(n: float) -> str:
     for unit in ("B", "KB", "MB", "GB", "TB"):
@@ -41,29 +70,47 @@ def _reveal(p: Path) -> None:
 
 
 class FolderScanner(QThread):
-    """Parses every *.xvg in a folder on a worker thread (SPEC §13)."""
+    """Parses every *.xvg in a folder on a worker thread (SPEC §13).
+
+    With recursive=True the scan walks subfolders (skipping hidden/dotted
+    directories) so nested analysis trees appear in one list (C08). Cloud
+    placeholders are listed without being read, so a scan never triggers a
+    mass OneDrive/Dropbox download (C09).
+    """
 
     file_parsed = Signal(object)
     done = Signal()
 
-    def __init__(self, folder: Path, parent=None):
+    def __init__(self, folder: Path, parent=None, recursive: bool = False):
         super().__init__(parent)
         self._folder = Path(folder)
+        self._recursive = recursive
         self._stop = False
 
     def stop(self) -> None:
         self._stop = True
 
+    def _iter(self):
+        if not self._recursive:
+            try:
+                yield from sorted(self._folder.iterdir())
+            except OSError:
+                return
+            return
+        for root, dirs, files in os.walk(self._folder):
+            dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+            yield from (Path(root) / name for name in sorted(files))
+
     def run(self) -> None:
-        try:
-            entries = sorted(self._folder.iterdir())
-        except OSError:
-            entries = []
-        for p in entries:
+        for p in self._iter():
             if self._stop:
                 return
-            if p.is_file() and p.suffix.lower() == ".xvg":
-                self.file_parsed.emit(parse_file(p))
+            if not p.is_file() or p.suffix.lower() != ".xvg":
+                continue
+            if is_cloud_placeholder(p):
+                self.file_parsed.emit(placeholder_file(p))
+                continue
+            self.file_parsed.emit(parse_file(p))
         self.done.emit()
 
 

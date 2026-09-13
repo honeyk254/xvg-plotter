@@ -439,3 +439,17 @@ Each milestone ends runnable; M2 onward is usable daily on the developer machine
 | macOS Gatekeeper blocks unsigned DMG | README documents right-click→Open; signing is backlog |
 | `.xvg` association conflicts with existing grace install | Association is **offered, not forced** (installer checkbox); per-OS fallback documented |
 | Very large files (multi-MB, 1M+ rows) | numpy-batched parse, async load with progress; plot decimation is backlog if needed |
+
+---
+
+## 17. v1.2.0 addenda (Phase 2, 2026-09-13)
+
+| Area | Behavior |
+|---|---|
+| Scanning (§6.2, C08) | Per-pane **"subfolders"** toggle (persisted `scan/recursive`): the scan walks subfolders, skipping hidden/dotted directories. |
+| Cloud files (C09) | Windows cloud placeholders (RECALL_ON_DATA_ACCESS/OPEN) are listed with a "cloud-only" warning **without being read** — a scan never triggers a mass download; selecting a placeholder parses (downloads) just that file. |
+| Decimation (C23) | Interactive draws decimate series above 20,000 points with min/max buckets (spikes preserved); exports, prints and clipboard copies render **full data** (`full_render`). |
+| Colors (C17) | **Okabe–Ito (colorblind-safe)** is the default palette; per-series color swatches in the series dock (click = pick, right-click = reset); `LEGEND_LOCS` gains **"outside right"**, rendered as a figure legend (`loc="outside right upper"`) so constrained layout reserves its space. |
+| Figure setup (C16) | Style tab gains **Fig size (in)** (0 = auto) and **Font** controls, persisted (`view/fig_w`, `view/fig_h`, `view/font`). With a size set, exports/prints skip tight cropping and honor the exact size. |
+| Export surface (§8, C29/C30/C33) | **Export all checked files…** (Ctrl+Shift+E): per-file renders into a folder with collision-safe names, progress + cancel. **Export data (CSV)…** (Ctrl+D): visible series (±/dx columns) or mean ± SD blocks, unit-converted. **Print…** (Ctrl+P) via QPrintDialog at the printer's resolution. |
+| Workflow (C19/C20/C22) | Shortcuts: Ctrl+F (filter focus, Esc clears), Ctrl+1/2/3 (Files/Series/Style), Ctrl+R (refresh both panes), F11 **Focus mode** (hides all panels), Ctrl+Shift+O **Open Folder in New Window** (secondary `MainWindow`, never persists geometry/last_folder). Help ▸ Keyboard shortcuts / Reading the analyses (C37), one-screen first-run intro (`ui/onboarded`). |

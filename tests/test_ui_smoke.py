@@ -496,7 +496,7 @@ def test_c39_logging_setup(app):
 def test_c40_settings_export_import_roundtrip(app, tmp_path):
     from xvg_plotter import settings
 
-    old = settings.get("export/dpi")
+    old = settings.get("export/dpi") or 300
     settings.set_("export/dpi", 311)
     try:
         ini = tmp_path / "s.ini"
@@ -518,7 +518,7 @@ def test_c03_and_c05_packaging_guards():
         "xvg_build", root / "packaging" / "build.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.VERSION == "1.0.2"  # single-sourced from version.py
+    assert mod.VERSION == "1.2.0"  # single-sourced from version.py
     iss = (root / "packaging" / "windows" / "setup.iss").read_text(encoding="utf-8")
     assert "#ifdef ONEDIR" in iss and "#ifdef MACHINE" in iss
     assert "/DONEDIR" in (root / "packaging" / "build.py").read_text(encoding="utf-8")
@@ -555,3 +555,307 @@ def test_plot_stays_light_in_dark_mode(app):
     panel.apply_theme(theme.DARK)
     r, g, b, _ = panel.fig.get_facecolor()
     assert (r, g, b) == (1.0, 1.0, 1.0)  # canvas stays publication-white
+
+
+# -- v1.2.0 remediation tests (REMEDIATION_PLAN.md Phase 2) -------------------
+
+
+def test_c08_recursive_scan(app, tmp_path):
+    from xvg_plotter.ui.main_window import MainWindow
+
+    (tmp_path / "top.xvg").write_text("@ title \"top\"\n0 0\n1 1\n", encoding="utf-8")
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    (sub / "deep.xvg").write_text("@ title \"deep\"\n0 0\n1 2\n", encoding="utf-8")
+    (sub / ".hidden").mkdir()
+    (sub / ".hidden" / "hid.xvg").write_text("0 0\n1 1\n", encoding="utf-8")
+    win = MainWindow()
+    try:
+        win._bars[0].chk_sub.setChecked(True)  # fires recursive_toggled → saved
+        win.load_folder(tmp_path, 0)
+        _wait_for_scan(win)
+        names = [win._tables[0].item(r, 1).text()
+                 for r in range(win._tables[0].rowCount())]
+        assert "top.xvg" in names and "deep.xvg" in names
+        assert not any(".hidden" in n for n in names)  # hidden dirs skipped
+        win._bars[0].chk_sub.setChecked(False)  # rescan without subfolders
+        _wait_for_scan(win)
+        names = [win._tables[0].item(r, 1).text()
+                 for r in range(win._tables[0].rowCount())]
+        assert "top.xvg" in names and "deep.xvg" not in names
+    finally:
+        win.close()
+
+
+def test_c09_cloud_placeholder_listed_without_reading(app, tmp_path, monkeypatch):
+    import xvg_plotter.ui.file_table as ft
+
+    f = tmp_path / "cloud.xvg"
+    f.write_text("0 0\n1 1\n", encoding="utf-8")
+    assert not ft.is_cloud_placeholder(f)  # a real local file is not a placeholder
+
+    stub = ft.placeholder_file(f)
+    assert "cloud-only" in stub.warnings[0] and not stub.datasets
+
+    # scanner lists the placeholder without ever parsing the file
+    calls = []
+    monkeypatch.setattr(ft, "is_cloud_placeholder", lambda p: True)
+    monkeypatch.setattr(ft, "parse_file",
+                        lambda p: calls.append(p) or (_ for _ in ()).throw(
+                            AssertionError("parse_file must not be called")))
+    from xvg_plotter.ui.file_table import FolderScanner
+
+    sc = FolderScanner(tmp_path)
+    seen = []
+    sc.file_parsed.connect(seen.append)
+    sc.start()
+    import time as _time
+    deadline = _time.time() + 5
+    while sc.isRunning() and _time.time() < deadline:
+        QApplication.processEvents()
+        _time.sleep(0.01)
+    for _ in range(50):  # queued cross-thread signals can land a tick later
+        QApplication.processEvents()
+        if len(seen) == 1:
+            break
+        _time.sleep(0.01)
+    assert len(seen) == 1 and "cloud-only" in seen[0].warnings[0]
+    assert calls == []
+
+
+def test_c16_figure_size_and_font_controls(app, tmp_path):
+    from PySide6.QtGui import QImage
+
+    from xvg_plotter import settings as s
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    out = tmp_path / "out"
+    out.mkdir()
+    f = tmp_path / "a.xvg"
+    f.write_text('@ title "t"\n@ yaxis label "E (kJ)"\n0 0\n1 1\n', encoding="utf-8")
+    fa = parse_file(f)
+    # clean slate: the style dock reads these at construction
+    old = (s.get("view/fig_w"), s.get("view/fig_h"), s.get("view/font"))
+    s.set_("view/fig_w", 0.0)
+    s.set_("view/fig_h", 0.0)
+    s.set_("view/font", "Match UI")
+    win = MainWindow()
+    try:
+        win.files[fa.path] = fa
+        win._tables[0].add_file(fa)
+        win.table.sync_check(fa.path, True)
+        win.style.spin_figw.setValue(8.0)
+        win.style.spin_figh.setValue(5.0)
+        win.style.cmb_font.setCurrentText("Arial")
+        assert win.panel._font_family == "Arial"
+        win._ask_directory = lambda *a, **k: str(out)
+        win._export_batch()
+        # exact publication size: 8x5 in at 300 dpi, no tight cropping
+        img = QImage(str(out / "t.png"))
+        assert img.width() == 2400 and img.height() == 1500
+        assert float(str(s.get("view/fig_w"))) == pytest.approx(8.0)
+        assert str(s.get("view/font")) == "Arial"
+    finally:
+        s.set_("view/fig_w", old[0])
+        s.set_("view/fig_h", old[1])
+        s.set_("view/font", old[2])
+        win.close()
+
+
+def test_c17_series_color_override_and_reset(app, tmp_path):
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+    from xvg_plotter.ui.options import PALETTES
+
+    f = tmp_path / "a.xvg"
+    f.write_text('@ title "t"\n@ yaxis label "E"\n0 0\n1 1\n', encoding="utf-8")
+    win = MainWindow()
+    try:
+        fa = parse_file(f)
+        win.files[fa.path] = fa
+        win.active = fa.path
+        win._refresh_series_dock()
+        default = win._compose_state([fa]).entries[0].color
+        win._on_series_color(fa, 0, 0, "#ff0000")
+        st = win._compose_state([fa])
+        assert st.entries[0].color == "#ff0000"
+        win._refresh_series_dock()
+        swatch = win.series._groups[fa.path].swatches[0]
+        assert "#ff0000" in swatch.styleSheet()
+        win._on_series_color(fa, 0, 0, None)  # reset → back to the cycle
+        assert win._compose_state([fa]).entries[0].color == default
+    finally:
+        win.close()
+
+    okabe = next(iter(PALETTES))  # first palette = the default
+    assert "colorblind" in okabe.lower()
+
+
+def test_c17_outside_right_legend(app):
+    import numpy as np
+
+    from xvg_plotter.ui.plot_canvas import Line, PlotPanel, PlotState
+
+    panel = PlotPanel()
+    x = np.linspace(0.1, 10, 100)
+    panel.render(PlotState(legend="outside right",
+                           entries=[Line(x, np.sin(x), label="s")]))
+    # an outside legend is a figure legend (constrained layout reserves its space)
+    assert panel.fig.legends or panel.fig.axes[0].get_legend()
+
+
+def test_c23_decimated_interactive_and_full_export(app):
+    import numpy as np
+
+    from xvg_plotter.ui.plot_canvas import Line, PlotPanel, PlotState
+
+    panel = PlotPanel()
+    x = np.linspace(0.1, 10, 50000)
+    st = PlotState(entries=[Line(x, np.sin(20 * x) + 0.01 * np.sin(2000 * x),
+                                 label="s")])
+    panel.render(st)  # interactive: decimated
+    plotted = len(panel.fig.axes[0].lines[0].get_xdata())
+    assert plotted < 50000 and plotted >= 20000
+    panel.render(st, full=True)  # exports: every point
+    assert len(panel.fig.axes[0].lines[0].get_xdata()) == 50000
+
+
+def test_c29_batch_export(app, tmp_path, monkeypatch):
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    out = tmp_path / "out"
+    out.mkdir()
+    files = []
+    for i in (1, 2):
+        p = tmp_path / f"plot{i}.xvg"
+        p.write_text(f"@ title \"p{i}\"\n0 0\n1 {i}\n", encoding="utf-8")
+        files.append(parse_file(p))
+    win = MainWindow()
+    try:
+        for fa in files:
+            win.files[fa.path] = fa
+            win._tables[0].add_file(fa)
+            win.table.sync_check(fa.path, True)
+        win._ask_directory = lambda *a, **k: str(out)
+        monkeypatch.setattr("xvg_plotter.settings.get",
+                            lambda k, d=None: "png" if k == "export/fmt" else d)
+        win._export_batch()
+        names = sorted(p.name for p in out.iterdir())
+        assert names == ["p1.png", "p2.png"]  # named after the plot title
+    finally:
+        win.close()
+
+
+def test_c30_csv_data_export(app, tmp_path):
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    out = tmp_path / "data.csv"
+    f = tmp_path / "rg.xvg"
+    f.write_text('@ title "Rg"\n@ yaxis label "Rg (nm)"\n'
+                 '@ s0 type xydy\n0 1 0.1\n1000 2 0.2\n', encoding="utf-8")
+    fa = parse_file(f)
+    win = MainWindow()
+    try:
+        win.files[fa.path] = fa
+        win.active = fa.path
+        win._ask_save_path = lambda *a, **k: str(out)
+        win._export_data()
+        text = out.read_text(encoding="utf-8")
+        assert "# file: rg.xvg" in text and "Rg (nm)" in text
+        assert "Rg (nm) ±" in text  # error column included
+        assert "# x unit: ns" in text  # auto unit conversion honored
+        assert text.strip().splitlines()[-1] == "1,2,0.2"  # x = 1000 ps -> 1 ns
+    finally:
+        win.close()
+
+
+def test_c33_print_to_pdf(app, tmp_path):
+    from PySide6.QtPrintSupport import QPrinter
+
+    from xvg_plotter.ui.main_window import MainWindow
+
+    out = tmp_path / "plot.pdf"
+    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(str(out))
+    win = MainWindow()
+    try:
+        win._print_plot(printer)  # empty plot: must not raise
+    finally:
+        win.close()
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_c19_shortcuts_and_help_dialogs(app):
+    from xvg_plotter.ui.help_dialogs import GlossaryDialog, KeyboardDialog
+    from xvg_plotter.ui.main_window import MainWindow
+
+    win = MainWindow()
+    try:
+        seqs = {a.shortcut().toString() for a in win.actions() if not a.shortcut().isEmpty()}
+        assert {"Ctrl+F", "Ctrl+1", "Ctrl+2", "Ctrl+3", "Ctrl+R"} <= seqs
+        assert "Keyboard shortcuts…" in _help_texts(win)
+        assert "Reading the analyses…" in _help_texts(win)
+        kbd = KeyboardDialog(win)
+        assert kbd._body.rowCount() >= 10
+        gloss = GlossaryDialog(win)
+        assert "RMSD" in gloss._body.toPlainText()
+    finally:
+        win.close()
+
+
+def test_c20_focus_mode_hides_and_restores(app):
+    from xvg_plotter.ui.main_window import MainWindow
+
+    win = MainWindow()
+    try:
+        for d in win._docks:
+            d.setVisible(True)
+        win._style_tab.setChecked(True)
+        win._focus_action.setChecked(True)
+        assert all(d.isHidden() for d in win._docks)
+        assert not win._style_tab.isChecked()
+        win._focus_action.setChecked(False)
+        assert not any(d.isHidden() for d in win._docks)
+        assert win._style_tab.isChecked()  # restored to the pre-focus state
+        win._style_tab.setChecked(False)
+    finally:
+        win.close()
+
+
+def test_c22_open_folder_in_new_window(app, tmp_path):
+    from xvg_plotter.ui import main_window as mw
+    from xvg_plotter.ui.main_window import MainWindow
+
+    d = tmp_path / "win2"
+    d.mkdir()
+    (d / "b.xvg").write_text("@ title \"b\"\n0 0\n1 1\n", encoding="utf-8")
+    win = MainWindow()
+    before = len(mw._WINDOWS)
+    try:
+        win._ask_directory = lambda *a, **k: str(d)
+        win._new_window()
+        assert len(mw._WINDOWS) == before + 1
+        second = mw._WINDOWS[-1]
+        assert second is not win and not second._primary_window
+        _wait_for_scan(second)
+        assert second._folders[0] == d.resolve()
+        second.close()
+        win.close()
+    finally:
+        mw._WINDOWS.clear()
+
+
+def test_c37_first_run_and_glossary(app):
+    from xvg_plotter.ui.first_run import FirstRunDialog
+    from xvg_plotter.ui.help_dialogs import GlossaryDialog
+
+    intro = FirstRunDialog()
+    assert "Welcome" in intro.windowTitle()
+    gloss = GlossaryDialog()
+    plain = gloss._body.toPlainText()
+    for term in ("RMSD", "Rg (gyrate)", "replica", "pin"):
+        assert term in plain

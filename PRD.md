@@ -120,7 +120,7 @@ Researchers fall back to ad-hoc matplotlib scripts that are rewritten (and forgo
 - Plotting via matplotlib: single-click plot, multi-file overlay, per-series toggle, error bars.
 - Interaction: pan/zoom/home toolbar, coordinate readout, legend-click to toggle series.
 - Styling: color cycle, line/marker toggles, grid, log-X/log-Y, legend position, title/axis-label overrides.
-- Export: PNG / TIFF / PDF / SVG / EPS with DPI control and transparent-background option; copy image to clipboard (at the export DPI). Settings export/import.
+- Export: PNG / TIFF / PDF / SVG / EPS with DPI control and transparent-background option; copy image to clipboard (at the export DPI); batch export of every checked file; CSV export of the plotted data; printing. Settings export/import. Exact figure size (inches) and font family for journal specs.
 - Settings persistence: last folder, recents, window geometry, export defaults.
 
 ### P1 — should ship in v1 (agreed must-have extras)
@@ -171,7 +171,6 @@ Additional experience requirements:
 ## 9. Backlog (post-v1)
 
 - Subplot grid mode (plot N files as a grid of small multiples).
-- Batch export (export every selected file's plot in one action).
 - Built-in file preview panel (sparkline) in the file list.
 - Signed/notarized macOS builds; CI-based release artifacts for all OSes.
 - Simple derived quantities (running average, baseline shift) beyond smoothing.

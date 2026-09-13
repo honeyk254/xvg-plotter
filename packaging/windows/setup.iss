@@ -9,7 +9,7 @@
 
 #define MyAppName "XVG Plotter"
 #ifndef APP_VERSION
-#define APP_VERSION "1.0.2"
+#define APP_VERSION "1.2.0"
 #endif
 #define MyAppExe "XVGPlotter.exe"
 

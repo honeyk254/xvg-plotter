@@ -176,6 +176,10 @@ changed the picture for three plan items and supersedes parts of §0:
 
 ## Phase 2 — UX features (moderate)
 
+> **Shipped in v1.2.0 (2026-09-13).** All items below are implemented — C08, C09, C16,
+> C17 (residuals), C19, C20 (residual), C22 (residual), C23, C29, C30, C33, C37 — each
+> with tests (57 → 73). Entries are kept as the original spec.
+
 ### C08 — Recursive scan / cross-folder search — **S**
 **Fix:** FolderBar gains an "include subfolders" checkbox (persisted); `FolderScanner` (`file_table.py:43-67`) walks with `QDirIterator(Dirs | Files, Subdirs)`, skipping hidden/dotted dirs; status bar reports scanned-folder count; filter box (already matches name+title, `file_table.py:173-178`) then effectively becomes cross-folder search.
 **Files:** `ui/folder_bar.py`, `ui/file_table.py`, `ui/main_window.py:205-228`.

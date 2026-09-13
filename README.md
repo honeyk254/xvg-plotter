@@ -52,8 +52,17 @@ including overlays, replica averaging, and clipboard-ready exports for slides.
 - **Theme**: polished light & dark UI (Fusion). The plot canvas stays light
   (publication-style) in both themes, so figures read like paper figures.
   Auto (follows the OS) / Light / Dark, remembered between runs.
-- **Export**: PNG/TIFF (DPI 100–600), PDF, SVG, EPS, transparent background — plus
-  *Copy Image* straight to the clipboard for slides (rendered at the export DPI).
+- **Export & output**: PNG/TIFF (DPI 100–600), PDF, SVG, EPS, transparent background —
+  *Copy Image* at the export DPI, **Export all checked files** in one go, **Export data
+  (CSV)** of the plotted numbers, and **Print** at the printer's resolution. Set an
+  exact figure size (inches) and font family for journal specs; huge files draw with
+  spike-preserving decimation and still export at full resolution.
+- **Colors & legend**: colorblind-safe Okabe–Ito palette by default, per-series color
+  swatches, and an outside-right legend that never covers data.
+- **Keyboard & onboarding**: Ctrl+F filter, Ctrl+1/2/3 panels, F11 focus mode,
+  Ctrl+Shift+E batch export, Ctrl+D CSV export, Ctrl+P print — Help ▸ *Keyboard
+  shortcuts* lists them all; Help ▸ *Reading the analyses* explains the jargon;
+  a one-screen intro appears on first launch.
 - **Native app**: own icon, single-instance (opening a second `.xvg` reuses the running
   window), pinnable recent folders, remembered window/export settings, manual
   *Check for updates*, settings export/import, live min/max/mean of plotted series.

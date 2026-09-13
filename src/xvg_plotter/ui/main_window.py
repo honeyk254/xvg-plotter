@@ -16,12 +16,14 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QDockWidget,
     QFileDialog,
     QLabel,
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressDialog,
     QSplitter,
     QToolButton,
     QVBoxLayout,
@@ -31,12 +33,14 @@ from PySide6.QtWidgets import (
 from .. import fileassoc, settings, updates
 from ..core import analysis
 from ..core.models import XvgFile, series_label
-from ..export import copy_image, save_figure
+from ..core.parser import parse_file
+from ..export import copy_image, print_figure, save_figure, write_csv
 from ..version import APP_VERSION
 from . import theme
 from .export_dialog import ExportDialog
 from .file_table import FileTable, FolderScanner
 from .folder_bar import FolderBar
+from .help_dialogs import GlossaryDialog, KeyboardDialog
 from .options import LINE_STYLES, PALETTES
 from .plot_canvas import Band, Line, PlotPanel, PlotState
 from .series_dock import SeriesDock
@@ -44,6 +48,8 @@ from .style_dock import StyleDock
 
 DEFAULT_SIZE = (1150, 720)
 MIN_SIZE = (900, 560)
+
+_WINDOWS: list["MainWindow"] = []  # keep secondary windows alive (C22)
 
 
 class _ColorCycle:
@@ -81,8 +87,9 @@ class PinnedCurve:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, primary: bool = True):
         super().__init__()
+        self._primary_window = primary  # C22: only the first window persists state
         self.setWindowTitle("XVG Plotter")
         self.files: dict[Path, XvgFile] = {}
         self.active: Path | None = None
@@ -90,6 +97,8 @@ class MainWindow(QMainWindow):
         self.visible: dict[tuple[Path, int, int], bool] = {}
         self._scanners: list[FolderScanner | None] = [None, None]
         self._folders: list[Path | None] = [None, None]
+        self._last_pane = 0
+        self._colors: dict[tuple[Path, int, int], str] = {}  # C17 overrides
         self.pins: dict[str, PinnedCurve] = {}
         self._entries: list = []
         self._pending: list[Path] = []
@@ -161,11 +170,13 @@ class MainWindow(QMainWindow):
                     self._bars[pn].current_folder(), pn))
             bar.filter_changed.connect(table.apply_filter)
             bar.pin_toggled.connect(lambda on, pn=pane: self._on_pin_toggled(on, pn))
+            bar.recursive_toggled.connect(lambda on, pn=pane: self._on_recursive(on, pn))
             table.overlay_toggled.connect(self._on_overlay)
             table.file_activated.connect(self._on_activate)
         self.series.series_toggled.connect(self._on_series_toggled)
         self.series.dataset_changed.connect(self._on_dataset_changed)
         self.series.options_changed.connect(self.update_plot)
+        self.series.series_color_changed.connect(self._on_series_color)
         self.style.style_changed.connect(self.update_plot)
         self.panel.save_requested.connect(self.export_dialog)
         self.panel.coords.connect(lambda s: self.statusBar().showMessage(s))
@@ -179,7 +190,7 @@ class MainWindow(QMainWindow):
 
         for key, restore in (("geometry", self.restoreGeometry),
                              ("window_state", self.restoreState)):
-            val = settings.get(key)
+            val = None if primary else settings.get(key)
             if val is not None:
                 try:
                     restore(val)
@@ -195,6 +206,10 @@ class MainWindow(QMainWindow):
         a.setShortcut(QKeySequence("Ctrl+O"))
         a.triggered.connect(self.folder_bar.pick_folder)
         m_file.addAction(a)
+        a = QAction("Open Folder in New Window…", self)  # C22: two-monitor setups
+        a.setShortcut(QKeySequence("Ctrl+Shift+O"))
+        a.triggered.connect(self._new_window)
+        m_file.addAction(a)
         a = QAction("Refresh", self)
         a.setShortcut(QKeySequence("F5"))
         a.triggered.connect(lambda: self.load_folder(self.folder_bar.current_folder()))
@@ -203,6 +218,18 @@ class MainWindow(QMainWindow):
         a = QAction("Export…", self)
         a.setShortcut(QKeySequence("Ctrl+E"))
         a.triggered.connect(self.export_dialog)
+        m_file.addAction(a)
+        a = QAction("Export all checked files…", self)  # C29: no more dialog loops
+        a.setShortcut(QKeySequence("Ctrl+Shift+E"))
+        a.triggered.connect(self._export_batch)
+        m_file.addAction(a)
+        a = QAction("Export data (CSV)…", self)  # C30
+        a.setShortcut(QKeySequence("Ctrl+D"))
+        a.triggered.connect(self._export_data)
+        m_file.addAction(a)
+        a = QAction("Print…", self)  # C33
+        a.setShortcut(QKeySequence("Ctrl+P"))
+        a.triggered.connect(self._print_plot)
         m_file.addAction(a)
         a = QAction("Copy Image", self)
         a.setShortcut(QKeySequence("Ctrl+Shift+C"))
@@ -239,8 +266,20 @@ class MainWindow(QMainWindow):
         a = QAction("Clear all pins", self)
         a.triggered.connect(self._clear_pins)
         m_view.addAction(a)
+        m_view.addSeparator()
+        self._focus_action = QAction("Focus mode", self)  # C20: plot only
+        self._focus_action.setCheckable(True)
+        self._focus_action.setShortcut(QKeySequence("F11"))
+        self._focus_action.toggled.connect(self._toggle_focus)
+        m_view.addAction(self._focus_action)
 
         m_help = mb.addMenu("&Help")
+        a = QAction("Keyboard shortcuts…", self)  # C19
+        a.triggered.connect(lambda: KeyboardDialog(self).exec())
+        m_help.addAction(a)
+        a = QAction("Reading the analyses…", self)  # C37
+        a.triggered.connect(lambda: GlossaryDialog(self).exec())
+        m_help.addAction(a)
         a = QAction("Check for updates…", self)
         a.triggered.connect(self._check_updates)
         m_help.addAction(a)
@@ -253,6 +292,19 @@ class MainWindow(QMainWindow):
         a = QAction("About", self)
         a.triggered.connect(self._about)
         m_help.addAction(a)
+
+        # C19: hidden shortcuts — filter focus, panel toggles, refresh both panes
+        for seq, slot in (("Ctrl+F", self._focus_filter),
+                          ("Ctrl+1", lambda: self._docks[0].setVisible(
+                              not self._docks[0].isVisible())),
+                          ("Ctrl+2", lambda: self._docks[1].setVisible(
+                              not self._docks[1].isVisible())),
+                          ("Ctrl+3", lambda: self._style_tab.toggle()),
+                          ("Ctrl+R", self._refresh_all)):
+            a = QAction(self)
+            a.setShortcut(QKeySequence(seq))
+            a.triggered.connect(slot)
+            self.addAction(a)
 
     def _about(self) -> None:
         import matplotlib
@@ -347,6 +399,7 @@ class MainWindow(QMainWindow):
         if sc is not None and sc.isRunning():
             sc.stop()
             sc.wait(2000)
+        self._last_pane = pane  # Ctrl+F focuses this pane's filter
         old = self._folders[pane]
         if old is not None and old != p:
             # drop the state belonging to this pane's previous folder only;
@@ -366,7 +419,7 @@ class MainWindow(QMainWindow):
         settings.set_("last_folder" if pane == 0 else "last_folder2", str(p))
         self._folders[pane] = p
         self._info.setText("scanning…")
-        sc = FolderScanner(p)
+        sc = FolderScanner(p, recursive=bar.recursive())  # C08
         self._scanners[pane] = sc
         sc.file_parsed.connect(lambda f, pn=pane: self._on_file(f, pn))
         sc.done.connect(lambda pn=pane: self._on_scan_done(pn))
@@ -471,6 +524,9 @@ class MainWindow(QMainWindow):
         self.update_plot()
 
     def _on_activate(self, f: XvgFile) -> None:
+        if not f.datasets and f.warnings:  # C09: hydrate a cloud placeholder on demand
+            f = parse_file(f.path)
+            self.files[f.path] = f
         for pn, t in enumerate(self._tables):
             if self._folders[pn] == f.path.parent:
                 t.set_checked_only(f.path)
@@ -550,7 +606,8 @@ class MainWindow(QMainWindow):
 
     def _refresh_series_dock(self) -> None:
         ts = self._targets()
-        self.series.rebuild(ts, self.active_ds, self.visible, self._compatible(ts))
+        self.series.rebuild(ts, self.active_ds, self.visible, self._compatible(ts),
+                            self._colors)
 
     def _compatible(self, files: list[XvgFile]) -> bool:
         if len(files) < 2:
@@ -642,7 +699,8 @@ class MainWindow(QMainWindow):
                             continue
                         x = analysis.convert_x(ds.x, unit)
                         y = ds.columns[s.y_col]
-                        c = colors.next()
+                        # C17: per-series color override, else the palette cycle
+                        c = self._colors.get((f.path, ds_i, i)) or colors.next()
                         base = series_label(s, f.y_label, len(ds.series))
                         line = Line(
                             x, y,
@@ -677,6 +735,14 @@ class MainWindow(QMainWindow):
 
     def update_plot(self, *_) -> None:
         ts = self._targets()
+        sst = self.style.state()
+        self.panel.set_font_family(None if sst.font == "Match UI" else sst.font)
+        if sst.fig_w != float(settings.get("view/fig_w", 0.0) or 0.0):
+            settings.set_("view/fig_w", sst.fig_w)
+        if sst.fig_h != float(settings.get("view/fig_h", 0.0) or 0.0):
+            settings.set_("view/fig_h", sst.fig_h)
+        if sst.font != str(settings.get("view/font", "Match UI")):
+            settings.set_("view/font", sst.font)
         st = self._compose_state(ts)
         self._entries = st.entries
         self.panel.render(st)
@@ -718,20 +784,31 @@ class MainWindow(QMainWindow):
         d = self.folder_bar.current_folder()
         return d if Path(d).is_dir() else str(Path.home())
 
+    def _fig_size(self) -> tuple | None:
+        """C16: the requested (w, h) inches, or None for auto size."""
+        sst = self.style.state()
+        if sst.fig_w > 0 and sst.fig_h > 0:
+            return (sst.fig_w, sst.fig_h)
+        return None
+
     def export_dialog(self) -> None:
         t = self._targets()
         base = (t[0].title or t[0].path.stem) if t else "plot"
         safe = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in base)
         dlg = ExportDialog(
             safe, self._current_dir(),
-            dpi=int(settings.get("export/dpi", 300)),
+            dpi=int(settings.get("export/dpi") or 300),
             fmt=str(settings.get("export/fmt", "png")),
             transparent=str(settings.get("export/transparent", "false")).lower() == "true",
             parent=self)
         if dlg.exec():
             o = dlg.options()
+            size = self._fig_size()
+            st = self._compose_state(self._targets())
             try:
-                save_figure(self.panel.fig, o["path"], o["dpi"], o["transparent"])
+                with self.panel.full_render(st, size):  # C23 full data, C16 exact size
+                    save_figure(self.panel.fig, o["path"], o["dpi"], o["transparent"],
+                                tight=size is None)
             except (OSError, ValueError, RuntimeError) as e:
                 QMessageBox.warning(self, "Export failed",
                                     f"Could not write {o['path']}:\n{e}")
@@ -741,17 +818,212 @@ class MainWindow(QMainWindow):
             settings.set_("export/transparent", o["transparent"])
             self.statusBar().showMessage(f"saved {o['path']}", 5000)
 
+    def _ask_directory(self, title: str, default: str) -> str:
+        return QFileDialog.getExistingDirectory(self, title, default)
+
+    def _ask_save_path(self, title: str, default: str) -> str:
+        path, _ = QFileDialog.getSaveFileName(self, title, default, "CSV (*.csv)")
+        return path
+
+    def _export_batch(self) -> None:
+        """C29: render every checked file as its own plot, one folder, no loops
+        through the export dialog."""
+        ts = self._checked()
+        if not ts:
+            self.statusBar().showMessage("check files to export first", 4000)
+            return
+        d = self._ask_directory("Export all checked plots to", self._current_dir())
+        if not d:
+            return
+        dpi = int(settings.get("export/dpi") or 300)
+        fmt = str(settings.get("export/fmt", "png"))
+        transparent = (str(settings.get("export/transparent", "false")).lower()
+                       == "true") and fmt != "eps"
+        prog = QProgressDialog(f"Exporting {len(ts)} plots…", "Cancel",
+                               0, len(ts), self)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+        size = self._fig_size()
+        saved = 0
+        try:
+            for i, f in enumerate(ts):
+                prog.setValue(i)
+                QApplication.processEvents()
+                if prog.wasCanceled():
+                    break
+                base = f.title or f.path.stem
+                safe = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in base)
+                out = Path(d) / f"{safe}.{fmt}"
+                n = 2
+                while out.exists():
+                    out = Path(d) / f"{safe}-{n}.{fmt}"
+                    n += 1
+                st = self._compose_state([f])
+                try:
+                    with self.panel.full_render(st, size):  # C23 + C16
+                        save_figure(self.panel.fig, out, dpi, transparent,
+                                    tight=size is None)
+                    saved += 1
+                except (OSError, ValueError, RuntimeError) as e:
+                    QMessageBox.warning(self, "Export failed",
+                                        f"Could not write {out}:\n{e}")
+            prog.setValue(len(ts))
+        finally:
+            self.update_plot()  # back to the interactive (decimated) view
+        self.statusBar().showMessage(f"exported {saved} plot(s) to {d}", 6000)
+
+    def _csv_sections(self, ts: list[XvgFile]) -> list:
+        """CSV blocks for the current view: averaged curves, or one block per
+        file with every visible series (± / dx columns included) — C30."""
+        sst = self.style.state()
+        ast = self.series.analysis_state()
+        unit = self._unit(ts, sst.unit)
+        sections = []
+        if ast.average and self._compatible(ts):
+            n_series = min(len(f.datasets[self.active_ds.get(f.path, 0)].series)
+                           for f in ts)
+            for i in range(n_series):
+                legend = series_label(
+                    ts[0].datasets[self.active_ds.get(ts[0].path, 0)].series[i],
+                    ts[0].y_label, n_series) or f"series {i + 1}"
+                curves = []
+                for f in ts:
+                    ds = f.datasets[self.active_ds.get(f.path, 0)]
+                    s = ds.series[i]
+                    curves.append((analysis.convert_x(ds.x, unit),
+                                   ds.columns[s.y_col]))
+                x, mean, std, _ = analysis.average_replicas(
+                    curves, common_range=ast.common_range)
+                sections.append((
+                    [f"# replica average: {legend}", f"# x unit: {unit}"],
+                    ["x", legend, legend + " SD"],
+                    [x, mean, std]))
+            return sections
+        multi = len(ts) > 1
+        for f in ts:
+            if not f.datasets:
+                continue
+            ds_i = self.active_ds.get(f.path, 0)
+            ds = f.datasets[ds_i]
+            headers = ["x"]
+            cols = [analysis.convert_x(ds.x, unit)]
+            for i, s in enumerate(ds.series):
+                if not self.visible.get((f.path, ds_i, i), True):
+                    continue
+                base = series_label(s, f.y_label, len(ds.series))
+                prefix = f"{f.path.stem}: {base}" if multi else base
+                headers.append(prefix)
+                cols.append(ds.columns[s.y_col])
+                if s.dy_col is not None:
+                    headers.append(prefix + " ±")
+                    cols.append(ds.columns[s.dy_col])
+                if s.dx_col is not None:
+                    headers.append(prefix + " dx")
+                    cols.append(analysis.convert_x(ds.columns[s.dx_col], unit))
+            sections.append(([f"# file: {f.path.name}", f"# x unit: {unit}"],
+                             headers, cols))
+        return sections
+
+    def _export_data(self) -> None:
+        """C30: save the plotted (unit-converted, averaged) series as numbers."""
+        ts = self._targets()
+        if not ts:
+            self.statusBar().showMessage("nothing plotted to export", 4000)
+            return
+        src = self._primary(ts)
+        base = (src.title or src.path.stem) if src else "data"
+        safe = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in base)
+        path = self._ask_save_path("Export data (CSV)",
+                                   str(Path(self._current_dir()) / f"{safe}.csv"))
+        if not path:
+            return
+        try:
+            write_csv(Path(path), self._csv_sections(ts))
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, "Export failed", f"Could not write {path}:\n{e}")
+            return
+        self.statusBar().showMessage(f"saved {path}", 5000)
+
+    def _print_plot(self, printer=None) -> None:
+        """C33: print the current plot at the printer's resolution."""
+        from PySide6.QtPrintSupport import QPrintDialog, QPrinter
+
+        if printer is None:
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            dlg = QPrintDialog(printer, self)
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return
+        st = self._compose_state(self._targets())
+        try:
+            with self.panel.full_render(st):
+                print_figure(self.panel.fig, printer)
+        except (OSError, ValueError, RuntimeError) as e:
+            QMessageBox.warning(self, "Print", f"Could not print:\n{e}")
+            return
+        self.statusBar().showMessage("sent to printer", 4000)
+
     def _copy_image(self) -> None:
         try:
-            copy_image(
-                self.panel.canvas,
-                dpi=int(settings.get("export/dpi", 300)),
-                transparent=str(settings.get("export/transparent", "false")).lower()
-                == "true")
+            st = self._compose_state(self._targets())
+            with self.panel.full_render(st):
+                copy_image(
+                    self.panel.canvas,
+                    dpi=int(settings.get("export/dpi") or 300),
+                    transparent=str(settings.get("export/transparent", "false"))
+                    .lower() == "true")
         except Exception as e:
             QMessageBox.warning(self, "Copy Image", f"Could not copy the plot: {e}")
             return
         self.statusBar().showMessage("plot image copied to clipboard", 4000)
+
+    # -- windows / focus mode / shortcuts ----------------------------------------
+
+    def _new_window(self) -> None:
+        """C22 residual: a real second window for two-monitor setups."""
+        d = self._ask_directory("Open folder in new window", self._current_dir())
+        if not d:
+            return
+        w = MainWindow(primary=False)
+        _WINDOWS.append(w)
+        w.show()
+        w.load_folder(d)
+
+    def _toggle_focus(self, on: bool) -> None:
+        """C20: hide every panel so only the plot remains."""
+        if on:
+            self._focus_state = ([not d.isHidden() for d in self._docks]
+                                 + [self._style_tab.isChecked()])
+            for d in self._docks:
+                d.setVisible(False)
+            self._style_tab.setChecked(False)
+        else:
+            for d, vis in zip(self._docks, self._focus_state[:len(self._docks)]):
+                d.setVisible(vis)
+            self._style_tab.setChecked(self._focus_state[len(self._docks)])
+
+    def _focus_filter(self) -> None:
+        bar = self._bars[self._last_pane]
+        bar.edit_filter.setFocus()
+        bar.edit_filter.selectAll()
+
+    def _refresh_all(self) -> None:
+        for pn, bar in enumerate(self._bars):
+            cur = bar.current_folder()
+            if cur and Path(cur).is_dir():
+                self.load_folder(cur, pn)
+
+    def _on_recursive(self, on: bool, pane: int = 0) -> None:
+        settings.set_("scan/recursive", on)
+        cur = self._bars[pane].current_folder()
+        if cur and Path(cur).is_dir():
+            self.load_folder(cur, pane)
+
+    def _on_series_color(self, f: XvgFile, ds_i: int, i: int, color) -> None:
+        """C17: per-series color override (None = back to the palette cycle)."""
+        if color:
+            self._colors[(f.path, ds_i, i)] = color
+        else:
+            self._colors.pop((f.path, ds_i, i), None)
+        self.update_plot()
 
     # -- pinning / settings files / association ----------------------------------
 
@@ -814,6 +1086,7 @@ class MainWindow(QMainWindow):
     # -- lifecycle -----------------------------------------------------------------
 
     def closeEvent(self, ev) -> None:
-        settings.set_("geometry", self.saveGeometry())
-        settings.set_("window_state", self.saveState())
+        if self._primary_window:  # C22: secondary windows never touch saved state
+            settings.set_("geometry", self.saveGeometry())
+            settings.set_("window_state", self.saveState())
         super().closeEvent(ev)

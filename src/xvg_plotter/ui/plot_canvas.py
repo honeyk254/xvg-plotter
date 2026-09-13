@@ -1,6 +1,7 @@
 """Plot canvas + toolbar + legend toggling (SPEC §6.3)."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,6 +19,10 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 from .options import LEGEND_LOCS, LINE_STYLES, PALETTES  # noqa: F401  (re-exported)
 from .theme import LIGHT, Tokens, current
 from ..core import analysis
+
+_FONT_BASE = ["DejaVu Sans", "Microsoft YaHei", "PingFang SC",
+              "Noto Sans CJK SC", "Malgun Gothic", "Arial"]
+DECIMATE_POINTS = 20000  # interactive cap; exports re-render with full=True (C23)
 
 
 @dataclass
@@ -119,6 +124,7 @@ class PlotPanel(QWidget):
         self.canvas.mpl_connect("button_press_event", self._on_button)
         self._targets: list = []
         self._last_state = PlotState()
+        self._font_family: str | None = None  # C16: explicit user font, if any
         self._view: tuple | None = None  # (labels, data_key, xlim, ylim)
         self.apply_theme(current())
 
@@ -127,14 +133,14 @@ class PlotPanel(QWidget):
         # only the chrome (toolbar, docks) follows the dark/light setting
         t = LIGHT
         self._tokens = t
+        chain = ([self._font_family] + _FONT_BASE) if self._font_family else _FONT_BASE
         mpl.rcParams.update({
             "font.size": 9,
             # C36: platform CJK fonts after DejaVu keep µ Å ± ε and Chinese/
             # Japanese/Korean titles from rendering as boxes; unicode_minus
             # avoids U+2212, which several of those fonts lack.
             "font.family": "sans-serif",
-            "font.sans-serif": ["DejaVu Sans", "Microsoft YaHei", "PingFang SC",
-                                "Noto Sans CJK SC", "Malgun Gothic", "Arial"],
+            "font.sans-serif": chain,
             "axes.unicode_minus": False,
             "text.color": t.text,
             "axes.titlecolor": t.text,
@@ -154,7 +160,31 @@ class PlotPanel(QWidget):
         self.toolbar.retheme()
         self.render(self._last_state)
 
-    def render(self, st: PlotState) -> None:
+    def set_font_family(self, family: str | None) -> None:
+        """Explicit font family for plots, or None to follow the C36 chain (C16)."""
+        if family != self._font_family:
+            self._font_family = family
+            self.apply_theme(current())
+
+    @contextmanager
+    def full_render(self, st: PlotState, size: tuple | None = None):
+        """Re-render without decimation for an export/print, then restore (C23).
+
+        size=(w, h) also applies a fixed figure size in inches for the export
+        (C16) and restores the previous one afterwards."""
+        old_size = self.fig.get_size_inches()
+        if size is not None:
+            self.fig.set_size_inches(size[0], size[1], forward=False)
+        self.render(st, full=True)
+        try:
+            yield
+        finally:
+            if size is not None:
+                self.fig.set_size_inches(float(old_size[0]), float(old_size[1]),
+                                         forward=False)
+            self.render(st, full=False)
+
+    def render(self, st: PlotState, full: bool = False) -> None:
         t = self._tokens
         labels_now = frozenset(e.label for e in st.entries if getattr(e, "label", ""))
         # carry the current (possibly user-zoomed) view across the redraw when
@@ -178,17 +208,34 @@ class PlotPanel(QWidget):
             ax.grid(True, color=t.grid, lw=0.6, alpha=0.6)
         for e in st.entries:
             if isinstance(e, Band):
-                ax.fill_between(e.x, e.lo, e.hi, color=e.color, alpha=0.25, lw=0)
+                sel = None
+                if not full and len(e.x) > DECIMATE_POINTS:
+                    sel = np.unique(np.concatenate([
+                        analysis.decimate_minmax(e.x, np.asarray(e.hi, dtype=float)),
+                        analysis.decimate_minmax(e.x, -np.asarray(e.lo, dtype=float))]))
+                bx = e.x if sel is None else np.asarray(e.x)[sel]
+                blo = e.lo if sel is None else np.asarray(e.lo)[sel]
+                bhi = e.hi if sel is None else np.asarray(e.hi)[sel]
+                ax.fill_between(bx, blo, bhi, color=e.color, alpha=0.25, lw=0)
                 continue
-            if e.dx is not None or e.dy is not None:
-                ax.errorbar(e.x, e.y, yerr=e.dy, xerr=e.dx, fmt=e.style, color=e.color,
+            sel = None
+            if not full and len(e.x) > DECIMATE_POINTS:
+                # C23: min/max buckets keep spikes visible without million-point draws
+                sel = analysis.decimate_minmax(e.x, e.y)
+            x = e.x if sel is None else np.asarray(e.x)[sel]
+            y = e.y if sel is None else np.asarray(e.y)[sel]
+            dy = None if e.dy is None else (e.dy if sel is None else np.asarray(e.dy)[sel])
+            dx = None if e.dx is None else (e.dx if sel is None else np.asarray(e.dx)[sel])
+            if dx is not None or dy is not None:
+                ax.errorbar(x, y, yerr=dy, xerr=dx, fmt=e.style, color=e.color,
                             lw=e.width, alpha=e.alpha, elinewidth=0.9, capsize=2,
                             label=e.label or None)
             else:
-                ax.plot(e.x, e.y, e.style, color=e.color, lw=e.width, alpha=e.alpha,
+                ax.plot(x, y, e.style, color=e.color, lw=e.width, alpha=e.alpha,
                         label=e.label or None)
             if e.smooth is not None:
-                ax.plot(e.x, e.smooth, "--", color=e.color, lw=1.0, alpha=0.9)
+                sm = e.smooth if sel is None else np.asarray(e.smooth)[sel]
+                ax.plot(x, sm, "--", color=e.color, lw=1.0, alpha=0.9)
         if st.title:
             ax.set_title(st.title)
         if st.xlabel:
@@ -199,9 +246,16 @@ class PlotPanel(QWidget):
         if st.legend != "off":
             labels = [h.get_label() for h in ax.get_legend_handles_labels()[0]]
             if labels:
-                leg = ax.legend(loc=st.legend, fontsize=9, framealpha=0.92,
-                                facecolor=t.panel, edgecolor=t.border,
-                                borderpad=0.6, labelspacing=0.35)
+                if st.legend == "outside right":  # C17: figure legend reserves space
+                    handles = ax.get_legend_handles_labels()[0]
+                    leg = self.fig.legend(handles=handles, loc="outside right upper",
+                                          fontsize=9, framealpha=0.92,
+                                          facecolor=t.panel, edgecolor=t.border,
+                                          borderpad=0.6, labelspacing=0.35)
+                else:
+                    leg = ax.legend(loc=st.legend, fontsize=9, framealpha=0.92,
+                                    facecolor=t.panel, edgecolor=t.border,
+                                    borderpad=0.6, labelspacing=0.35)
                 for proxy, text in zip(leg.get_lines(), leg.get_texts()):
                     proxy.set_label(text.get_text())  # pick handler matches on label
                     proxy.set_picker(True)
@@ -235,13 +289,15 @@ class PlotPanel(QWidget):
     def _on_button(self, ev):
         if ev.button != 3 or not self.fig.axes:
             return
-        leg = self.fig.axes[0].get_legend()
-        if leg is None:
-            return
-        for ln in leg.get_lines():
-            if ln.contains(ev)[0]:
-                self.pin_requested.emit(ln.get_label())
-                return
+        legs = ([a.get_legend() for a in self.fig.axes]
+                + list(self.fig.legends))  # covers outside-right (figure) legends
+        for leg in legs:
+            if leg is None:
+                continue
+            for ln in leg.get_lines():
+                if ln.contains(ev)[0]:
+                    self.pin_requested.emit(ln.get_label())
+                    return
 
     def _on_pick(self, ev):
         if ev.mouseevent.button != 1:  # left-click toggles visibility; right = pin

@@ -113,6 +113,11 @@ def main(argv=None) -> int:
         last2 = settings.get("last_folder2")
         if last2 and Path(str(last2)).is_dir():
             win.load_folder(str(last2), 1)
+
+    if not settings.get("ui/onboarded"):  # C37: one-screen intro, shown once
+        from .ui.first_run import FirstRunDialog
+        FirstRunDialog(win).exec()
+        settings.set_("ui/onboarded", True)
     return app.exec()
 
 

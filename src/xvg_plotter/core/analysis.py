@@ -27,6 +27,27 @@ def median_dt(x) -> float:
     return float(np.median(d)) if d.size else 0.0
 
 
+def decimate_minmax(x, y, max_points: int = 20000) -> np.ndarray:
+    """Index subset keeping every bucket's min and max — interactive-view
+    decimation for huge series (C23). Returns all indices unchanged when the
+    series is already small enough; buckets with only NaNs contribute their
+    first point so gaps never collapse."""
+    x = np.asarray(x)
+    y = np.asarray(y, dtype=float)
+    n = x.size
+    if n <= max_points:
+        return np.arange(n)
+    bucket = int(np.ceil(n / max_points))
+    m = (n // bucket) * bucket
+    if m == 0:
+        return np.arange(n)
+    yb = y[:m].reshape(-1, bucket)
+    lo = np.where(np.isnan(yb), np.inf, yb).argmin(axis=1)
+    hi = np.where(np.isnan(yb), -np.inf, yb).argmax(axis=1)
+    base = np.arange(0, m, bucket)
+    return np.unique(np.concatenate([base + lo, base + hi, np.arange(m, n)]))
+
+
 def moving_average(y, window: int) -> np.ndarray:
     """Centered moving average, edge-padded; even windows rounded up to odd."""
     window = max(int(window), 1)

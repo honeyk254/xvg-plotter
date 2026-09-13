@@ -4,6 +4,7 @@ from xvg_plotter.core.analysis import (
     auto_unit,
     average_replicas,
     convert_x,
+    decimate_minmax,
     is_time_label,
     median_dt,
     moving_average,
@@ -113,6 +114,31 @@ def test_series_summary_format_and_cap():
     s = series_summary(named, max_series=4)
     assert s.endswith("+2 more") and s.count(";") == 4
     assert series_summary([]) == ""
+
+
+def test_decimate_small_series_passthrough():
+    x = np.arange(50.0)
+    sel = decimate_minmax(x, np.sin(x), max_points=100)
+    assert sel.tolist() == list(range(50))  # nothing to decimate
+
+
+def test_decimate_preserves_bucket_extremes():
+    n = 1000
+    x = np.arange(float(n))
+    y = np.zeros(n)
+    y[123] = -5.0  # a sharp dip inside bucket 1
+    y[456] = 9.0   # a sharp spike inside bucket 3
+    sel = decimate_minmax(x, y, max_points=10)
+    assert len(sel) <= 2 * 100 + (n % 100) + 2
+    assert 123 in sel and 456 in sel  # spikes survive
+    assert y[sel].min() == -5.0 and y[sel].max() == 9.0
+
+
+def test_decimate_nan_buckets_never_collapse():
+    x = np.arange(float(500))
+    y = np.full(500, np.nan)
+    sel = decimate_minmax(x, y, max_points=10)
+    assert sel.size > 0  # all-NaN buckets still keep their first point
 
 
 def test_convert_and_label():
