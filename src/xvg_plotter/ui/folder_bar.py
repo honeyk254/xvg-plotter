@@ -28,7 +28,7 @@ class FolderBar(QWidget):
 
     def __init__(self, recents: list[str], parent=None):
         super().__init__(parent)
-        self.btn_open = QPushButton(icon("folder"), "Open Folder…")
+        self.btn_open = QPushButton(icon("folder"), self.tr("Open Folder…"))
         self.combo = QComboBox()
         self.combo.setEditable(True)
         self.combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
@@ -36,23 +36,26 @@ class FolderBar(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.combo.setMinimumContentsLength(26)
         self.combo.addItems(recents)
-        self.combo.setToolTip("Current folder; the list holds pinned and recent folders")
+        self.combo.setToolTip(self.tr(
+            "Current folder; the list holds pinned and recent folders"))
         self.btn_refresh = QPushButton()
         self.btn_refresh.setIcon(icon("refresh"))
-        self.btn_refresh.setToolTip("Rescan folder (F5)")
+        self.btn_refresh.setToolTip(self.tr("Rescan folder (F5)"))
         self.btn_pin = QPushButton()
         self.btn_pin.setIcon(icon("pin"))
         self.btn_pin.setCheckable(True)
-        self.btn_pin.setToolTip("Pin this folder to the top of the list")
-        self.chk_sub = QCheckBox("subfolders")
+        self.btn_pin.setToolTip(self.tr("Pin this folder to the top of the list"))
+        self.chk_sub = QCheckBox(self.tr("subfolders"))
         self.chk_sub.setChecked(bool(settings.get("scan/recursive", False)))
-        self.chk_sub.setToolTip("Include .xvg files in subfolders when scanning (C08)")
+        self.chk_sub.setToolTip(self.tr(
+            "Include .xvg files in subfolders when scanning"))
         self.edit_filter = QLineEdit()
-        self.edit_filter.setPlaceholderText("filter…")
+        self.edit_filter.setPlaceholderText(self.tr("filter…"))
         self.edit_filter.setClearButtonEnabled(True)
         self.edit_filter.addAction(icon("search"), QLineEdit.ActionPosition.LeadingPosition)
         self.edit_filter.setMaximumWidth(160)
-        self.edit_filter.setToolTip("Filter the list by file name or title (Ctrl+F; Esc clears)")
+        self.edit_filter.setToolTip(self.tr(
+            "Filter the list by file name or title (Ctrl+F; Esc clears)"))
         self.edit_filter.installEventFilter(self)  # Esc clears (C19)
 
         lay = QHBoxLayout(self)
@@ -102,8 +105,8 @@ class FolderBar(QWidget):
         self.btn_pin.blockSignals(True)
         self.btn_pin.setChecked(on)
         self.btn_pin.blockSignals(False)
-        self.btn_pin.setToolTip("Unpin this folder" if on
-                                else "Pin this folder to the top of the list")
+        self.btn_pin.setToolTip(self.tr("Unpin this folder") if on else
+                                self.tr("Pin this folder to the top of the list"))
 
     def recursive(self) -> bool:
         return self.chk_sub.isChecked()
@@ -116,7 +119,8 @@ class FolderBar(QWidget):
 
     def pick_folder(self) -> None:
         d = QFileDialog.getExistingDirectory(
-            self, "Open analysis folder", self.combo.currentText() or str(Path.home()))
+            self, self.tr("Open analysis folder"),
+            self.combo.currentText() or str(Path.home()))
         if d:
             self.folder_requested.emit(d)
 

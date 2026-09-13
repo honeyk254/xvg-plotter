@@ -10,13 +10,17 @@ replacement for xmgrace, built with PySide6 + matplotlib.
 ![Release](https://img.shields.io/github/v/release/honeyk254/xvg-plotter)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-informational)
-![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-86%20passing-brightgreen)
 
 <p align="center">
   <table>
     <tr>
-      <td align="center"><img src="docs/screenshot-dark.png" alt="dark theme" width="420"><br><sub><b>Dark</b> — follows your OS theme</sub></td>
+      <td align="center"><img src="docs/screenshot-dark.png" alt="dark theme" width="420"><br><sub><b>Dark</b> — replica average ± SD, fit line, annotation</sub></td>
       <td align="center"><img src="docs/screenshot-light.png" alt="light theme" width="420"><br><sub><b>Light</b> — switch anytime from the View menu</sub></td>
+    </tr>
+    <tr>
+      <td align="center"><img src="docs/screenshot-grid.png" alt="grid view" width="420"><br><sub><b>Grid view</b> — one subplot per checked file (Ctrl+G)</sub></td>
+      <td align="center"><img src="docs/screenshot-zh.png" alt="Chinese UI" width="420"><br><sub><b>中文界面</b> — View ▸ Language (System/English/中文)</sub></td>
     </tr>
   </table>
 </p>
@@ -49,6 +53,20 @@ including overlays, replica averaging, and clipboard-ready exports for slides.
 - **Interact**: pan, zoom, home, live cursor coordinates; click a legend entry to
   show/hide a series. Style tweaks keep your zoom, and switching files rescales
   the axes. Drag `.xvg` files or folders straight onto the window.
+- **Session restore**: checked files, active file + dataset, hidden series,
+  per-series colors, style and analysis settings, annotations and the canvas zoom
+  are saved on close and restored on launch — yesterday's comparison comes back
+  exactly as you left it.
+- **Multi-dataset files**: every `&`-separated dataset of a file is listed with its
+  own toggleable series; datasets overlay within a file and across files, and the
+  CSV export follows the same view.
+- **Annotate & derive**: click ✎ Text to place draggable text labels on the canvas
+  (kept in exports/prints); Normalize (first value / max), Subtract baseline, and a
+  dashed least-squares **Fit line** with its equation in the legend — all
+  display-only, your files are never modified.
+- **Grid view**: View ▸ *Grid view of checked files* (Ctrl+G) draws each checked
+  file in its own subplot — an auto N×M small-multiples grid (up to 24 panels) —
+  instead of an overlay; exports and prints output the whole grid.
 - **Theme**: polished light & dark UI (Fusion). The plot canvas stays light
   (publication-style) in both themes, so figures read like paper figures.
   Auto (follows the OS) / Light / Dark, remembered between runs.
@@ -59,10 +77,13 @@ including overlays, replica averaging, and clipboard-ready exports for slides.
   spike-preserving decimation and still export at full resolution.
 - **Colors & legend**: colorblind-safe Okabe–Ito palette by default, per-series color
   swatches, and an outside-right legend that never covers data.
-- **Keyboard & onboarding**: Ctrl+F filter, Ctrl+1/2/3 panels, F11 focus mode,
-  Ctrl+Shift+E batch export, Ctrl+D CSV export, Ctrl+P print — Help ▸ *Keyboard
-  shortcuts* lists them all; Help ▸ *Reading the analyses* explains the jargon;
-  a one-screen intro appears on first launch.
+- **Keyboard & onboarding**: Ctrl+F filter, Ctrl+1/2/3 panels, Ctrl+G grid view,
+  F11 focus mode, Ctrl+Shift+E batch export, Ctrl+D CSV export, Ctrl+P print —
+  Help ▸ *Keyboard shortcuts* lists them all; Help ▸ *Reading the analyses*
+  explains the jargon; a one-screen intro appears on first launch.
+- **In your language**: the full UI ships in English and 中文（简体） —
+  View ▸ *Language* switches (applies after restart); untranslated strings fall
+  back to English.
 - **Native app**: own icon, single-instance (opening a second `.xvg` reuses the running
   window), pinnable recent folders, remembered window/export settings, manual
   *Check for updates*, settings export/import, live min/max/mean of plotted series.
@@ -170,4 +191,7 @@ Layout: `src/xvg_plotter/core/` (parser, models, analysis — pure Python, unit-
   a frame-index or other non-time X axis is left untouched (explicit unit picks still work).
 - A rotating log (`xvg_plotter.log`) lives in the per-user app-data folder; unexpected
   errors show a dialog with copyable details and are written there.
+- Translations live in `src/xvg_plotter/i18n/` as plain dictionaries — add strings to
+  `zh_CN.py` to extend the Chinese catalog; `python tools/i18n_check.py` verifies every
+  `tr()` string in the source is covered.
 - macOS builds are unsigned in v1 (right-click → Open on first launch).

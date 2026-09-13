@@ -60,10 +60,10 @@ Researchers fall back to ad-hoc matplotlib scripts that are rewritten (and forgo
 
 | Deferred | Reason |
 |---|---|
-| Curve fitting / data editing | Viewer, not analysis environment |
+| Curve fitting / data editing | Display-only helpers (normalize, baseline, least-squares fit line) shipped in v1.3; full data editing stays out of scope |
 | Reading `.xpm`, `.edr`, `.xtc` directly | Scope; these need different renderers |
-| Subplot grid layouts | Nice-to-have; single-axes covers the 90 % workflow |
-| Batch export of many files at once | Backlog (see §9) |
+| Subplot grid layouts | ~~Nice-to-have~~ shipped in v1.3 (View ▸ Grid view of checked files) |
+| Batch export of many files at once | ~~Backlog~~ shipped in v1.2 (File ▸ Export all checked files) |
 | Remote/server mode | Data is local; a desktop app is the right shape |
 | Auto-update / code-signed macOS builds | Backlog; documented workaround for Gatekeeper instead |
 | CI release automation | Build scripts are runnable by hand per-OS first |
@@ -170,11 +170,8 @@ Additional experience requirements:
 
 ## 9. Backlog (post-v1)
 
-- Subplot grid mode (plot N files as a grid of small multiples).
 - Built-in file preview panel (sparkline) in the file list.
 - Signed/notarized macOS builds; CI-based release artifacts for all OSes.
-- Simple derived quantities (running average, baseline shift) beyond smoothing.
-- Localization.
 
 ---
 

@@ -1,5 +1,60 @@
 # Changelog
 
+## 1.3.0 — 2026-09-13
+
+Phases 3–4 of the remediation plan ([REMEDIATION_PLAN.md](REMEDIATION_PLAN.md)) —
+the last six open problems (C21, C11, C15, C18, C24, C35) are closed. **All 40
+panel problems are now either fixed or documented v1 boundaries.**
+
+**Session restore (C21)**
+
+- The app remembers your **plot session**: checked files, the active file and
+  dataset, hidden series, per-series colors, style + analysis settings,
+  annotations and the canvas zoom are saved on close and restored on launch —
+  yesterday's comparison comes back exactly as you left it.
+
+**Multi-dataset files (C11)**
+
+- `&`-separated datasets are now **first-class**: the Series panel lists every
+  dataset's series of a checked file (with a "dataset N · points" section per
+  block), any of them can be toggled, and datasets overlay within a file and
+  across files (legend labels qualify as `stem·dsN` when several datasets of
+  one file are plotted). The CSV data export follows the same view.
+
+**Annotations (C15)**
+
+- **✎ Text** on the plot toolbar enables annotate mode: click the canvas to
+  place a text label at that data point, drag labels to move them. Annotations
+  survive re-renders and are included in exports and prints;
+  View ▸ *Clear annotations* removes them all.
+
+**Grid view (C18)**
+
+- View ▸ *Grid view of checked files* (Ctrl+G) draws each checked file in its
+  **own subplot** — an auto N×M small-multiples grid (up to 24 panels, overflow
+  reported in the status bar) — instead of an overlay. Exports and prints
+  output the whole grid.
+
+**Derived quantities (C24)**
+
+- The Analysis panel gains **Normalize** (by first value or by maximum),
+  **Subtract baseline** (first point) and **Fit line** — a dashed least-squares
+  `y = a·x + b` drawn over the visible X range with the equation in the legend.
+  All three are display-only; your files are never modified.
+
+**Localization (C35)**
+
+- The UI ships **in Chinese**: every one of the 222 interface strings is
+  translated (menus, docks, dialogs, glossary, first-run intro) via a
+  dict-backed Qt translator; View ▸ *Language* selects System default /
+  English / 中文（简体） and applies after a restart. Untranslated strings
+  fall back to English.
+
+**Also**
+
+- 13 new tests (73 → 86) covering the six fixes; `tools/i18n_check.py` keeps
+  the translation catalog complete (222/222).
+
 ## 1.2.0 — 2026-09-13
 
 Phase 2 of the remediation plan ([REMEDIATION_PLAN.md](REMEDIATION_PLAN.md)) — all

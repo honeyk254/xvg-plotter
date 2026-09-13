@@ -194,7 +194,11 @@ A file containing `xydx*` types renders with error bars and a note; nothing degr
 ### 5.6 Multi-dataset files (`&`)
 
 Each `&`-separated block becomes a `Dataset`. When a loaded file has > 1 dataset, the series dock
-shows a dataset selector (default: first dataset). Export/averaging operate on the visible dataset.
+lists **every dataset's series** under a "dataset N · points" section header, each individually
+toggleable (v1.3, C11); datasets overlay within a file and across files, with legend labels
+qualified as `stem·dsN` while several datasets of one file are plotted. The dataset combo above
+the sections picks the *focus* dataset used by replica averaging; the CSV export follows the
+same visibility model.
 
 ---
 

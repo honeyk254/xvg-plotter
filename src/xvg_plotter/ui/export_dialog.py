@@ -27,33 +27,33 @@ class ExportDialog(QDialog):
     def __init__(self, default_name: str, default_dir: str, dpi: int = 300,
                  fmt: str = "png", transparent: bool = False, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Export plot")
+        self.setWindowTitle(self.tr("Export plot"))
         self.setMinimumWidth(380)
         self.ed_name = QLineEdit(default_name)
         self.ed_dir = QLineEdit(default_dir)
         self.btn_dir = QPushButton("…")
-        self.btn_dir.setToolTip("Browse for folder")
+        self.btn_dir.setToolTip(self.tr("Browse for folder"))
         self.cmb_fmt = QComboBox()
         self.cmb_fmt.addItems(FORMATS)
         self.cmb_fmt.setCurrentText(fmt)
         self.spin_dpi = QSpinBox()
         self.spin_dpi.setRange(100, 600)
         self.spin_dpi.setValue(dpi)
-        self.chk_transparent = QCheckBox("transparent background")
+        self.chk_transparent = QCheckBox(self.tr("transparent background"))
         self.chk_transparent.setChecked(transparent)
         self.spin_dpi.setEnabled(fmt in RASTER_FORMATS)
 
         form = QFormLayout()
         form.setContentsMargins(theme.SP_L, theme.SP_L, theme.SP_L, theme.SP_L)
         form.setSpacing(theme.SP_S + 1)
-        form.addRow("Filename", self.ed_name)
+        form.addRow(self.tr("Filename"), self.ed_name)
         dirrow = QHBoxLayout()
         dirrow.setSpacing(theme.SP_S)
         dirrow.addWidget(self.ed_dir, 1)
         dirrow.addWidget(self.btn_dir)
-        form.addRow("Folder", dirrow)
-        form.addRow("Format", self.cmb_fmt)
-        form.addRow("DPI (raster: PNG/TIFF)", self.spin_dpi)
+        form.addRow(self.tr("Folder"), dirrow)
+        form.addRow(self.tr("Format"), self.cmb_fmt)
+        form.addRow(self.tr("DPI (raster: PNG/TIFF)"), self.spin_dpi)
         form.addRow("", self.chk_transparent)
 
         self.bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
@@ -80,10 +80,11 @@ class ExportDialog(QDialog):
         eps = t == "eps"  # EPS cannot carry a transparent background
         self.chk_transparent.setEnabled(not eps)
         self.chk_transparent.setToolTip(
-            "EPS does not support a transparent background" if eps else "")
+            self.tr("EPS does not support a transparent background") if eps else "")
 
     def _browse(self) -> None:
-        d = QFileDialog.getExistingDirectory(self, "Export to folder", self.ed_dir.text())
+        d = QFileDialog.getExistingDirectory(self, self.tr("Export to folder"),
+                                             self.ed_dir.text())
         if d:
             self.ed_dir.setText(d)
 

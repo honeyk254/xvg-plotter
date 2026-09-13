@@ -19,6 +19,7 @@ KEYBOARD_ROWS = [
     ("Ctrl+1 / Ctrl+2", "Show or hide the Files / Series panels"),
     ("Ctrl+3", "Show or hide the Style options"),
     ("F11", "Focus mode — hide everything except the plot"),
+    ("Ctrl+G", "Grid view — one subplot per checked file (small multiples)"),
     ("Ctrl+E", "Export the current plot…"),
     ("Ctrl+Shift+E", "Export every checked file as its own plot…"),
     ("Ctrl+D", "Export the plotted data as CSV…"),
@@ -49,6 +50,20 @@ GLOSSARY = [
                        "the label shows the window in physical time."),
     ("pin", "Right-click a legend entry to pin a curve — it stays plotted while you "
             "switch files or folders, so you can compare anything with anything."),
+    ("normalize / baseline / fit", "Analysis-panel helpers. 'Normalize' divides "
+                                   "each curve by its first value or maximum; 'Subtract "
+                                   "baseline' shifts curves to start at zero; 'Fit line' "
+                                   "draws a dashed least-squares y = a·x + b over the "
+                                   "visible range. Display-only — your files are "
+                                   "never changed."),
+    ("annotation", "Click ✎ Text on the plot toolbar, then click the canvas to place a "
+                   "text label at that data point. Drag labels to move them; they are "
+                   "kept in exports and prints. View ▸ Clear annotations removes all."),
+    ("grid view", "View ▸ Grid view of checked files (Ctrl+G) draws each checked file "
+                  "in its own small subplot — up to 24 — instead of overlaying them."),
+    ("dataset", "A '&' in an .xvg file starts a new dataset. Multi-dataset files list "
+                "every dataset's series in the Series panel; tick any of them, also "
+                "across files, to overlay."),
 ]
 
 _INTRO = (
@@ -91,14 +106,14 @@ class KeyboardDialog(_InfoDialog):
     """Every shortcut, one row each (C19)."""
 
     def __init__(self, parent=None):
-        super().__init__("Keyboard shortcuts", parent)
+        super().__init__(self.tr("Keyboard shortcuts"), parent)
         table = QTableWidget(len(KEYBOARD_ROWS), 2, self)
-        table.setHorizontalHeaderLabels(["Shortcut", "Action"])
+        table.setHorizontalHeaderLabels([self.tr("Shortcut"), self.tr("Action")])
         for r, (seq, action) in enumerate(KEYBOARD_ROWS):
             seq_item = QTableWidgetItem(seq)
             seq_item.setFont(self.font())
             table.setItem(r, 0, seq_item)
-            table.setItem(r, 1, QTableWidgetItem(action))
+            table.setItem(r, 1, QTableWidgetItem(self.tr(action)))
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.verticalHeader().setVisible(False)
         table.setCornerButtonEnabled(False)
@@ -113,11 +128,12 @@ class GlossaryDialog(_InfoDialog):
     """Plain-language explanation of the jargon in the file names (C37)."""
 
     def __init__(self, parent=None):
-        super().__init__("Reading the analyses", parent)
+        super().__init__(self.tr("Reading the analyses"), parent)
         body = QTextBrowser(self)
         body.setOpenExternalLinks(False)
-        parts = [f"<dt><b>{term}</b></dt><dd>{text}</dd>" for term, text in GLOSSARY]
-        body.setHtml("<h3>The jargon, in plain language</h3><dl>" + "".join(parts)
-                     + "</dl>")
+        parts = [f"<dt><b>{self.tr(term)}</b></dt><dd>{self.tr(text)}</dd>"
+                 for term, text in GLOSSARY]
+        body.setHtml(f"<h3>{self.tr('The jargon, in plain language')}</h3><dl>"
+                     + "".join(parts) + "</dl>")
         self._body = body
         self._finish()

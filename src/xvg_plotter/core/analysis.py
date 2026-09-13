@@ -126,6 +126,60 @@ def convert_x(x, unit: str) -> np.ndarray:
     return np.asarray(x, dtype=float) * UNITS[unit]
 
 
+def norm_reference(y, mode: str) -> float:
+    """The reference value normalize() divides by (0.0 when undefined) — C24."""
+    finite = np.asarray(y, dtype=float)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return 0.0
+    return float(finite[0]) if mode == "first" else float(finite.max())
+
+
+def normalize(y, mode: str) -> np.ndarray:
+    """Scale Y by its first finite value ("first") or its max ("max") — C24.
+
+    'off' (or an all-NaN/zero reference) returns the data unchanged."""
+    y = np.asarray(y, dtype=float)
+    if mode not in ("first", "max"):
+        return y
+    ref = norm_reference(y, mode)
+    if ref == 0.0:
+        return y
+    return y / ref
+
+
+def subtract_baseline(y) -> np.ndarray:
+    """Subtract the first finite value from every point (C24)."""
+    y = np.asarray(y, dtype=float)
+    finite = y[np.isfinite(y)]
+    if finite.size == 0:
+        return y
+    return y - float(finite[0])
+
+
+def fit_line(x, y, x_range: tuple[float, float] | None = None):
+    """Least-squares y = a·x + b over the data inside `x_range` (C24).
+
+    x_range limits the fit (and the returned line) to the visible span —
+    the axes limits when set. Returns (xfit, a, b) or None with < 2 points."""
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if x_range is not None:
+        lo, hi = min(x_range), max(x_range)
+        mask = (x >= lo) & (x <= hi) & np.isfinite(y)
+    else:
+        mask = np.isfinite(y)
+    if int(mask.sum()) < 2:
+        return None
+    a, b = np.polyfit(x[mask], y[mask], 1)
+    if x_range is not None:
+        lo, hi = min(x_range), max(x_range)
+    else:
+        lo, hi = float(x[mask].min()), float(x[mask].max())
+    xfit = np.array([lo, hi])
+    return xfit, float(a), float(b)
+
+
 def summary_stats(y) -> tuple[float, float, float]:
     """(min, max, mean) over finite values (C26)."""
     v = np.asarray(y, dtype=float)

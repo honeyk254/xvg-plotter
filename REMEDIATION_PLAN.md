@@ -178,7 +178,9 @@ changed the picture for three plan items and supersedes parts of §0:
 
 > **Shipped in v1.2.0 (2026-09-13).** All items below are implemented — C08, C09, C16,
 > C17 (residuals), C19, C20 (residual), C22 (residual), C23, C29, C30, C33, C37 — each
-> with tests (57 → 73). Entries are kept as the original spec.
+> with tests (57 → 73). Entries are kept as the original spec. **Exception: C21 was
+> skipped in v1.2.0 and shipped with Phase 3 in v1.3.0** (it remains listed here as
+> originally scoped).
 
 ### C08 — Recursive scan / cross-folder search — **S**
 **Fix:** FolderBar gains an "include subfolders" checkbox (persisted); `FolderScanner` (`file_table.py:43-67`) walks with `QDirIterator(Dirs | Files, Subdirs)`, skipping hidden/dotted dirs; status bar reports scanned-folder count; filter box (already matches name+title, `file_table.py:173-178`) then effectively becomes cross-folder search.
@@ -252,6 +254,9 @@ changed the picture for three plan items and supersedes parts of §0:
 
 ## Phase 3 — Larger features
 
+> **Shipped in v1.3.0 (2026-09-13)** — C11, C15, C18, C24, plus the leftover C21 from
+> Phase 2, each with tests (73 → 86). Entries are kept as the original spec.
+
 ### C11 — Multi-dataset files as first-class series — **M**
 **Fix:** for files with `&`-separated datasets (`parser.py:114-126`), the series dock lists *every dataset* of the active file as toggleable entries ("dataset 2 · 1,024 pts"), not just the selected one (`series_dock.py:158-164` dataset selector stays as the "focus" default). Overlaying dataset 2 of file A against dataset 1 of file B then works through the existing overlay pipeline (`main_window.py:_compose_state` iterates targets already).
 **Files:** `ui/series_dock.py:107-181`, `ui/main_window.py:261-266, 322-389` (~50 lines).
@@ -276,6 +281,13 @@ changed the picture for three plan items and supersedes parts of §0:
 
 ## Phase 4 — Localization
 
+> **Shipped in v1.3.0 (2026-09-13).** Implementation note: instead of .ts/.qm +
+> pyside6-lupdate/lrelease, the zh-CN catalog lives in `i18n/zh_CN.py` as a plain
+> {English: Chinese} dict served by a small dict-backed QTranslator
+> (`i18n/__init__.py`) — same runtime behavior (tr() lookup, English fallback),
+> no Linguist toolchain needed. `tools/i18n_check.py` verifies that every tr()
+> string in the source has a translation (222/222 at ship time).
+
 ### C35 — i18n with a shipped zh-CN translation — **L**
 **Fix:** (a) wrap all user-facing strings in `self.tr()` / `QCoreApplication.translate` across `ui/` (mechanical pass, ~150 keys); (b) `pyside6-lupdate` / `pyside6-lrelease` steps in `build.py` producing `.qm` files bundled as package data; (c) ship `i18n/xvgplotter_zh_CN.ts` (menu, docks, dialogs, warnings); (d) language combo in settings (System/English/中文) with `QTranslator` install before `MainWindow` construction; (e) the C36 font-fallback chain (Phase 1) guarantees CJK renders in-canvas. English remains the fallback for any untranslated key.
 **Files:** all `ui/*.py` (string pass), new `i18n/` sources, `packaging/build.py` (lrelease step), `ui/main_window.py` + `app.py` (translator install).
@@ -297,8 +309,8 @@ changed the picture for three plan items and supersedes parts of §0:
 | 0 — Release integrity & docs | C01, C03, C04, C05, C06, C07, C12 | 0.5–1 day | immediately |
 | 1 — Small code fixes | C02, C10, C13, C14, C25, C26, C27, C28, C31, C32, C34, C36, C38*, C39, C40 | 2–3 days | v1.0.1 |
 | 2 — UX features | C08, C09, C16, C17, C19, C20, C21, C22, C23, C29, C30, C33, C37 | 5–7 days | v1.1 |
-| 3 — Larger features | C11, C15, C18, C24 | 4–6 days | v1.2 |
-| 4 — Localization | C35 | 2–3 days | v1.2 |
+| 3 — Larger features (+ C21) | C21, C11, C15, C18, C24 | 4–6 days | v1.3 |
+| 4 — Localization | C35 | 2–3 days | v1.3 |
 
 \* C38 = verification + docs only (already implemented).
 

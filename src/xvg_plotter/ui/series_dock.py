@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
 from ..core.models import XvgFile, series_label
 from . import theme
 
+NORMALIZE_MODES = ["off", "first value", "max"]
+
 
 @dataclass
 class AnalysisState:
@@ -32,6 +34,9 @@ class AnalysisState:
     common_range: bool = False
     smooth: bool = False
     window: int = 21
+    norm: str = "off"        # C24: "off" | "first" | "max"
+    baseline: bool = False   # C24: subtract the first finite point
+    fit: bool = False        # C24: dashed least-squares line over the view
 
 
 @dataclass
@@ -39,12 +44,13 @@ class _Group:
     file: XvgFile
     box: QGroupBox
     combo: QComboBox | None
-    checks: list[QCheckBox] = field(default_factory=list)
-    swatches: dict[int, QToolButton] = field(default_factory=dict)
+    # C11: every dataset's series is listed; key = dataset index
+    checks: dict[int, list[QCheckBox]] = field(default_factory=dict)
+    swatches: dict[tuple[int, int], QToolButton] = field(default_factory=dict)
 
 
 class SeriesDock(QWidget):
-    series_toggled = Signal(object, int, bool)   # (file, series index, visible)
+    series_toggled = Signal(object, int, int, bool)  # (file, dataset, series, visible)
     dataset_changed = Signal(object, int)
     options_changed = Signal()
     series_color_changed = Signal(object, int, int, object)  # (file, ds, series, color|None)
@@ -64,23 +70,36 @@ class SeriesDock(QWidget):
         self.scroll.setWidget(self._inner)
         self.scroll.setFrameShape(QScrollArea.Shape.NoFrame)
 
-        self.chk_average = QCheckBox("Average replicas (mean ± SD)")
-        self.chk_average.setToolTip("Overlay the mean of matching replicas with a "
-                                    "shaded ± SD band (C27)")
-        self.chk_members = QCheckBox("Show member curves")
-        self.chk_members.setToolTip("Draw each replica faintly under the mean")
-        self.chk_common = QCheckBox("Common time range")
-        self.chk_common.setToolTip(
+        self.chk_average = QCheckBox(self.tr("Average replicas (mean ± SD)"))
+        self.chk_average.setToolTip(self.tr("Overlay the mean of matching replicas "
+                                        "with a shaded ± SD band"))
+        self.chk_members = QCheckBox(self.tr("Show member curves"))
+        self.chk_members.setToolTip(self.tr("Draw each replica faintly under the mean"))
+        self.chk_common = QCheckBox(self.tr("Common time range"))
+        self.chk_common.setToolTip(self.tr(
             "Average only the time span every replica shares — shorter runs no "
-            "longer truncate longer ones")
-        self.chk_smooth = QCheckBox("Smooth overlay")
-        self.chk_smooth.setToolTip("Dashed moving-average overlay on every plotted series")
+            "longer truncate longer ones"))
+        self.chk_smooth = QCheckBox(self.tr("Smooth overlay"))
+        self.chk_smooth.setToolTip(self.tr(
+            "Dashed moving-average overlay on every plotted series"))
         self.spin_window = QSpinBox()
         self.spin_window.setRange(3, 2001)
         self.spin_window.setSingleStep(2)
         self.spin_window.setValue(21)
-        self.spin_window.setToolTip("Moving-average window (points)")
+        self.spin_window.setToolTip(self.tr("Moving-average window (points)"))
         self.lbl_time = QLabel("")
+        # C24: derived quantities — display-only transforms of the plotted series
+        self.cmb_norm = QComboBox()
+        self.cmb_norm.addItems([self.tr(m) for m in NORMALIZE_MODES])
+        self.cmb_norm.setToolTip(self.tr("Normalize every plotted series: divide by "
+                                     "its first value or by its maximum"))
+        self.chk_baseline = QCheckBox(self.tr("Subtract baseline (first point)"))
+        self.chk_baseline.setToolTip(self.tr("Shift each series down by its first "
+                                         "value so curves start at zero"))
+        self.chk_fit = QCheckBox(self.tr("Fit line (least squares)"))
+        self.chk_fit.setToolTip(self.tr("Dashed y = a·x + b least-squares line over "
+                                    "the visible X range, with the equation in "
+                                    "the legend"))
         self.chk_smooth.toggled.connect(self.spin_window.setEnabled)
         self.chk_average.toggled.connect(self.chk_members.setEnabled)
         self.chk_average.toggled.connect(self.chk_common.setEnabled)
@@ -94,24 +113,31 @@ class SeriesDock(QWidget):
         a.addWidget(self.chk_common)
         row = QHBoxLayout()
         row.addWidget(self.chk_smooth)
-        row.addWidget(QLabel("window"))
+        row.addWidget(QLabel(self.tr("window")))
         row.addWidget(self.spin_window)
         row.addWidget(self.lbl_time)
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel(self.tr("Normalize")))
+        row2.addWidget(self.cmb_norm, 1)
 
-        opts = QGroupBox("Analysis")
+        opts = QGroupBox(self.tr("Analysis"))
         ov = QVBoxLayout(opts)
         ov.setContentsMargins(theme.SP_M, theme.SP_M, theme.SP_M, theme.SP_M)
         ov.addLayout(a)
         ov.addLayout(row)
+        ov.addLayout(row2)
+        ov.addWidget(self.chk_baseline)
+        ov.addWidget(self.chk_fit)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(theme.SP_S)
         outer.addWidget(self.scroll, 1)
         outer.addWidget(opts)
         for w in (self.chk_average, self.chk_members, self.chk_common,
-                  self.chk_smooth):
+                  self.chk_smooth, self.chk_baseline, self.chk_fit):
             w.toggled.connect(self.options_changed)
         self.spin_window.valueChanged.connect(self.options_changed)
+        self.cmb_norm.currentIndexChanged.connect(self.options_changed)
 
     # -- state ---------------------------------------------------------------
 
@@ -122,6 +148,9 @@ class SeriesDock(QWidget):
             common_range=self.chk_common.isChecked(),
             smooth=self.chk_smooth.isChecked(),
             window=self.spin_window.value(),
+            norm=NORMALIZE_MODES[self.cmb_norm.currentIndex()],
+            baseline=self.chk_baseline.isChecked(),
+            fit=self.chk_fit.isChecked(),
         )
 
     def set_time_hint(self, text: str) -> None:
@@ -151,8 +180,9 @@ class SeriesDock(QWidget):
             self._vbox.insertWidget(self._vbox.count() - 1, g.box)
         self._updating = False
         self.chk_average.setEnabled(avg_allowed)
-        self.chk_average.setToolTip("" if avg_allowed
-                                    else "select ≥ 2 files with matching column structure")
+        self.chk_average.setToolTip("" if avg_allowed else
+                                    self.tr("select ≥ 2 files with matching "
+                                            "column structure"))
 
     def _remove_group(self, g: _Group) -> None:
         self._vbox.removeWidget(g.box)
@@ -165,13 +195,15 @@ class SeriesDock(QWidget):
             g.combo.blockSignals(True)
             g.combo.setCurrentIndex(ds_i)
             g.combo.blockSignals(False)
-        ds = f.datasets[ds_i]
-        for i, cb in enumerate(g.checks):
-            cb.blockSignals(True)
-            cb.setChecked(visible.get((f.path, ds_i, i), True))
-            cb.blockSignals(False)
-        for i, sw in g.swatches.items():  # keep swatches in sync with overrides
-            self._paint_swatch(sw, colors.get((f.path, ds_i, i)))
+        for d_i, cbs in g.checks.items():
+            if d_i >= len(f.datasets):
+                continue
+            for i, cb in enumerate(cbs):
+                cb.blockSignals(True)
+                cb.setChecked(visible.get((f.path, d_i, i), True))
+                cb.blockSignals(False)
+        for (d_i, i), sw in g.swatches.items():  # keep swatches in sync
+            self._paint_swatch(sw, colors.get((f.path, d_i, i)))
 
     def _make_group(self, f: XvgFile, active_ds: dict, visible: dict,
                     colors: dict) -> _Group:
@@ -181,44 +213,56 @@ class SeriesDock(QWidget):
         v.setSpacing(theme.SP_S - 1)
         combo = None
         if not f.datasets:
-            v.addWidget(QLabel("no data rows"))
+            v.addWidget(QLabel(self.tr("no data rows")))
             return _Group(file=f, box=box, combo=combo)
         ds_i = self._dataset_index(f, active_ds)
-        ds = f.datasets[ds_i]
-        if len(f.datasets) > 1:
+        multi_ds = len(f.datasets) > 1
+        if multi_ds:  # C11: the focus dataset (drives averaging) stays selectable
             combo = QComboBox()
-            combo.addItems([f"dataset {i + 1} ({len(d.x)} pts)"
+            combo.addItems([self.tr("dataset {n} ({pts} pts)").format(
+                                n=i + 1, pts=len(d.x))
                             for i, d in enumerate(f.datasets)])
             combo.setCurrentIndex(ds_i)
             combo.currentIndexChanged.connect(lambda i, f=f: self._emit_dataset(f, i))
+            combo.setToolTip(self.tr("Focus dataset for replica averaging; every "
+                                     "dataset's series below can be plotted "
+                                     "individually"))
             v.addWidget(combo)
-        checks = []
-        swatches: dict[int, QToolButton] = {}
-        for i, s in enumerate(ds.series):
-            row = QHBoxLayout()
-            label = series_label(s, f.y_label, len(ds.series))
-            if s.dy_col is not None:
-                label += f"  (± col {s.dy_col})"
-            if s.dx_col is not None:
-                label += f"  (dx col {s.dx_col})"
-            cb = QCheckBox(label)
-            cb.setChecked(visible.get((f.path, ds_i, i), True))
-            cb.toggled.connect(lambda on, f=f, i=i: self._emit_toggled(f, i, on))
-            row.addWidget(cb, 1)
-            sw = QToolButton()
-            sw.setFixedSize(18, 18)
-            sw.setToolTip("Click to set this curve's color; right-click to reset "
-                          "to the palette cycle (C17)")
-            self._paint_swatch(sw, colors.get((f.path, ds_i, i)))
-            sw.clicked.connect(lambda _=False, f=f, i=i, sw=sw:
-                               self._pick_color(f, ds_i, i, sw))
-            sw.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            sw.customContextMenuRequested.connect(
-                lambda _pos, f=f, i=i, sw=sw: self._reset_color(f, ds_i, i, sw))
-            row.addWidget(sw)
-            v.addLayout(row)
-            checks.append(cb)
-            swatches[i] = sw
+        checks: dict[int, list[QCheckBox]] = {}
+        swatches: dict[tuple[int, int], QToolButton] = {}
+        for d_i, ds in enumerate(f.datasets):
+            if multi_ds:  # C11: a section per dataset, all series toggleable
+                head = QLabel(self.tr("dataset {n} · {pts} pts").format(
+                    n=d_i + 1, pts=len(ds.x)))
+                head.setStyleSheet("font-weight: 600;")
+                v.addWidget(head)
+            for i, s in enumerate(ds.series):
+                row = QHBoxLayout()
+                label = series_label(s, f.y_label, len(ds.series))
+                if s.dy_col is not None:
+                    label += f"  (± col {s.dy_col})"
+                if s.dx_col is not None:
+                    label += f"  (dx col {s.dx_col})"
+                cb = QCheckBox(label)
+                cb.setChecked(visible.get((f.path, d_i, i), True))
+                cb.toggled.connect(lambda on, f=f, d=d_i, i=i:
+                                   self._emit_toggled(f, d, i, on))
+                row.addWidget(cb, 1)
+                sw = QToolButton()
+                sw.setFixedSize(18, 18)
+                sw.setToolTip(self.tr("Click to set this curve's color; right-click to "
+                              "reset to the palette cycle"))
+                self._paint_swatch(sw, colors.get((f.path, d_i, i)))
+                sw.clicked.connect(lambda _=False, f=f, d=d_i, i=i, sw=sw:
+                                   self._pick_color(f, d, i, sw))
+                sw.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+                sw.customContextMenuRequested.connect(
+                    lambda _pos, f=f, d=d_i, i=i, sw=sw:
+                    self._reset_color(f, d, i, sw))
+                row.addWidget(sw)
+                v.addLayout(row)
+                checks.setdefault(d_i, []).append(cb)
+                swatches[(d_i, i)] = sw
         return _Group(file=f, box=box, combo=combo, checks=checks, swatches=swatches)
 
     @staticmethod
@@ -227,7 +271,9 @@ class SeriesDock(QWidget):
                           if color else "background: rgba(127,127,127,64);")
 
     def _pick_color(self, f: XvgFile, ds_i: int, i: int, sw: QToolButton) -> None:
-        c = QColorDialog.getColor(parent=self, title=f"Curve color — {f.path.name}")
+        c = QColorDialog.getColor(
+            parent=self,
+            title=self.tr("Curve color — {name}").format(name=f.path.name))
         if not c.isValid():
             return
         self._paint_swatch(sw, c.name())
@@ -235,7 +281,7 @@ class SeriesDock(QWidget):
 
     def _reset_color(self, f: XvgFile, ds_i: int, i: int, sw: QToolButton) -> None:
         m = QMenu(self)
-        act = m.addAction("Reset to palette cycle")
+        act = m.addAction(self.tr("Reset to palette cycle"))
         if m.exec(QCursor.pos()) != act:
             return
         self._paint_swatch(sw, None)
@@ -245,9 +291,9 @@ class SeriesDock(QWidget):
     def _dataset_index(f: XvgFile, active_ds: dict) -> int:
         return min(active_ds.get(f.path, 0), len(f.datasets) - 1)
 
-    def _emit_toggled(self, f: XvgFile, i: int, on: bool) -> None:
+    def _emit_toggled(self, f: XvgFile, ds_i: int, i: int, on: bool) -> None:
         if not self._updating:
-            self.series_toggled.emit(f, i, on)
+            self.series_toggled.emit(f, ds_i, i, on)
 
     def _emit_dataset(self, f: XvgFile, i: int) -> None:
         if not self._updating:

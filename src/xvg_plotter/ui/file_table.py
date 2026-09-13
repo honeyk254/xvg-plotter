@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QCoreApplication, Qt, QThread, Signal
 from PySide6.QtGui import QBrush, QColor, QGuiApplication
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -120,7 +120,8 @@ class FileTable(QTableWidget):
 
     def __init__(self, parent=None):
         super().__init__(0, len(COLS), parent)
-        self.setHorizontalHeaderLabels(COLS)
+        self.setHorizontalHeaderLabels(
+            [QCoreApplication.translate("FileTable", c) for c in COLS])
         self.verticalHeader().setVisible(False)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -162,10 +163,12 @@ class FileTable(QTableWidget):
 
         name = QTableWidgetItem(f.path.name)
         name.setData(Qt.ItemDataRole.UserRole, f)
-        tips = list(f.warnings)
+        tips = [QCoreApplication.translate("FileTable", w) for w in f.warnings]
         if f.stats.directives_ignored:  # C10: never silently drop grace styling
-            tips.append(f"{f.stats.directives_ignored} grace directive(s) ignored — "
-                        f"in-file styling not applied")
+            tips.append(QCoreApplication.translate(
+                "FileTable",
+                "{n} grace directive(s) ignored — in-file styling not "
+                "applied").format(n=f.stats.directives_ignored))
         if tips:
             self._warned.add(f.path)
             name.setText("⚠ " + f.path.name)
@@ -263,13 +266,13 @@ class FileTable(QTableWidget):
             return
         f = self.item(r, 1).data(Qt.ItemDataRole.UserRole)
         m = QMenu(self)
-        a_show = m.addAction("Show in folder")
-        a_copy = m.addAction("Copy path")
+        a_show = m.addAction(QCoreApplication.translate("FileTable", "Show in folder"))
+        a_copy = m.addAction(QCoreApplication.translate("FileTable", "Copy path"))
         act = m.exec(self.viewport().mapToGlobal(pos))
         if act == a_show:
             try:
                 _reveal(f.path)
             except OSError as e:
-                QMessageBox.warning(self, "Show in folder", str(e))
+                QMessageBox.warning(self, QCoreApplication.translate("FileTable", "Show in folder"), str(e))
         elif act == a_copy:
             QGuiApplication.clipboard().setText(str(f.path))

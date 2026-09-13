@@ -58,10 +58,14 @@ def setup_logging() -> Path | None:
         log.critical("uncaught exception", exc_info=(t, v, tb))
         if QApplication.instance() is not None:
             try:
+                from PySide6.QtCore import QCoreApplication
+                qtr = QCoreApplication.translate
                 box = QMessageBox(
-                    QMessageBox.Icon.Critical, "XVG Plotter — unexpected error",
-                    f"An unexpected error occurred:\n{v}\n\n"
-                    f"A full trace was written to the log:\n{p}")
+                    QMessageBox.Icon.Critical,
+                    qtr("app", "XVG Plotter — unexpected error"),
+                    qtr("app", "An unexpected error occurred:\n{err}\n\n"
+                               "A full trace was written to the log:\n{log}")
+                    .format(err=v, log=p))
                 box.setDetailedText("".join(traceback.format_exception(t, v, tb)))
                 box.exec()
             except Exception:
@@ -84,6 +88,13 @@ def main(argv=None) -> int:
     app.setApplicationName("XVG Plotter")
     app.setOrganizationName("XVGPlotter")
     setup_logging()  # after the app name, so AppDataLocation resolves per-app
+    # C35: install the UI translation before any window is constructed
+    from PySide6.QtCore import QLocale
+    from .i18n import install_translator
+    lang = settings.language()
+    if lang == "system":
+        lang = "zh_CN" if QLocale.system().name().startswith("zh") else "en"
+    install_translator(app, lang)
     # Fusion renders our stylesheet identically on every platform
     app.setStyle(QStyleFactory.create("Fusion"))
     from .ui import theme
@@ -113,6 +124,7 @@ def main(argv=None) -> int:
         last2 = settings.get("last_folder2")
         if last2 and Path(str(last2)).is_dir():
             win.load_folder(str(last2), 1)
+        win.restore_session()  # C21: re-check files, styles, zoom from last run
 
     if not settings.get("ui/onboarded"):  # C37: one-screen intro, shown once
         from .ui.first_run import FirstRunDialog

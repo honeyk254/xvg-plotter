@@ -205,7 +205,8 @@ def test_series_dock_rebuild_preserves_scroll_and_syncs(app):
     visible: dict = {}
     dock.rebuild([f], {}, visible, False)
     assert len(dock._groups) == 1
-    assert len(dock._groups[f.path].checks) == len(f.datasets[0].series)
+    checks = dock._groups[f.path].checks
+    assert sum(len(cbs) for cbs in checks.values()) == len(f.datasets[0].series)
     # rebuilding with the same file keeps the same widgets (no teardown)
     g = dock._groups[f.path]
     dock.rebuild([f], {}, visible, False)
@@ -518,7 +519,7 @@ def test_c03_and_c05_packaging_guards():
         "xvg_build", root / "packaging" / "build.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.VERSION == "1.2.0"  # single-sourced from version.py
+    assert mod.VERSION == "1.3.0"  # single-sourced from version.py
     iss = (root / "packaging" / "windows" / "setup.iss").read_text(encoding="utf-8")
     assert "#ifdef ONEDIR" in iss and "#ifdef MACHINE" in iss
     assert "/DONEDIR" in (root / "packaging" / "build.py").read_text(encoding="utf-8")
@@ -681,7 +682,7 @@ def test_c17_series_color_override_and_reset(app, tmp_path):
         st = win._compose_state([fa])
         assert st.entries[0].color == "#ff0000"
         win._refresh_series_dock()
-        swatch = win.series._groups[fa.path].swatches[0]
+        swatch = win.series._groups[fa.path].swatches[(0, 0)]
         assert "#ff0000" in swatch.styleSheet()
         win._on_series_color(fa, 0, 0, None)  # reset → back to the cycle
         assert win._compose_state([fa]).entries[0].color == default
@@ -859,3 +860,305 @@ def test_c37_first_run_and_glossary(app):
     plain = gloss._body.toPlainText()
     for term in ("RMSD", "Rg (gyrate)", "replica", "pin"):
         assert term in plain
+
+
+# -- v1.3.0 remediation tests (REMEDIATION_PLAN.md Phase 2 leftover / 3 / 4) ----
+
+
+def test_c24_derived_quantities_compose(app, tmp_path):
+    import numpy as np
+
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    f = tmp_path / "lin.xvg"
+    f.write_text("0 2\n1 4\n2 6\n3 8\n", encoding="utf-8")  # y = 2x + 2
+    fa = parse_file(f)
+    win = MainWindow()
+    try:
+        win.files[fa.path] = fa
+        win.active = fa.path
+        st = win._compose_state([fa])
+        assert st.entries[0].y == pytest.approx([2, 4, 6, 8])
+        # baseline subtraction shifts to zero
+        win.series.chk_baseline.setChecked(True)
+        st = win._compose_state([fa])
+        assert st.entries[0].y == pytest.approx([0, 2, 4, 6])
+        # baseline+max normalize: divide by the max of the shifted curve
+        win.series.cmb_norm.setCurrentIndex(2)  # max
+        st = win._compose_state([fa])
+        assert st.entries[0].y == pytest.approx([0.0, 1 / 3, 2 / 3, 1.0])
+        # normalize by first value without baseline (a shifted curve's first
+        # value is 0, so normalize-by-first alone is intentionally a no-op)
+        win.series.chk_baseline.setChecked(False)
+        win.series.cmb_norm.setCurrentIndex(1)  # first value
+        st = win._compose_state([fa])
+        assert st.entries[0].y == pytest.approx([1.0, 2.0, 3.0, 4.0])
+        # off again, then the least-squares fit overlay
+        win.series.cmb_norm.setCurrentIndex(0)
+        win.series.chk_fit.setChecked(True)
+        st = win._compose_state([fa])
+        assert len(st.entries) == 2
+        fit = st.entries[1]
+        assert fit.style == "--"
+        assert fit.label.startswith("fit: y = 2·x + 2")
+        assert fit.y == pytest.approx(2 * fit.x + 2)
+        # the fit is limited to the visible X range
+        win.update_plot()
+        win.panel.fig.axes[0].set_xlim(1.0, 2.0)
+        st = win._compose_state([fa])
+        fit = st.entries[1]
+        assert fit.x.min() >= 1.0 and fit.x.max() <= 2.0
+    finally:
+        win.close()
+
+
+def test_c15_annotation_dialog_wiring(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    f = tmp_path / "a.xvg"
+    f.write_text('@ title "t"\n0 0\n1 1\n', encoding="utf-8")
+    fa = parse_file(f)
+    win = MainWindow()
+    try:
+        win.files[fa.path] = fa
+        win.active = fa.path
+        monkeypatch.setattr(QInputDialog, "getText",
+                            staticmethod(lambda *a, **k: ("plateau", True)))
+        win.panel.annotation_requested.emit(0.5, 0.25)
+        assert win._annotations == [(0.5, 0.25, "plateau")]
+        assert win._ann_clear_action.isEnabled()
+        win.update_plot()
+        texts = [t.get_text() for t in win.panel.fig.axes[0].texts]
+        assert "plateau" in texts
+        # the compose pipeline carries annotations into exports/prints
+        st = win._compose_state([fa])
+        assert st.annotations == [(0.5, 0.25, "plateau")]
+        win._clear_annotations()
+        assert win._compose_state([fa]).annotations == []
+        assert not win._ann_clear_action.isEnabled()
+    finally:
+        win.close()
+
+
+def test_c15_canvas_annotation_render_and_drag_sync(app):
+    import numpy as np
+
+    from xvg_plotter.ui.plot_canvas import Line, PlotPanel, PlotState
+
+    panel = PlotPanel()
+    x = np.linspace(0, 10, 50)
+    st = PlotState(entries=[Line(x, x, label="s")],
+                   annotations=[(2.0, 3.0, "note")])
+    panel.render(st)
+    assert len(panel._ann_artists) == 1
+    artist = panel._ann_artists[0]
+    assert artist.get_text() == "note"
+    assert artist.get_position() == (2.0, 3.0)
+    # a click in annotate mode emits the placement signal
+    seen = []
+    panel.annotation_requested.connect(lambda px, py: seen.append((px, py)))
+    panel.annotate_mode = True
+    ax = panel.fig.axes[0]
+
+    class _Ev:
+        button = 1
+        inaxes = ax
+        xdata = 1.5
+        ydata = 2.5
+
+    panel._on_button(_Ev())
+    assert seen == [(1.5, 2.5)]
+    # dragging the label and releasing syncs the new position into the state
+    artist.set_position((4.0, 5.0))
+    panel._on_release(None)
+    assert panel._last_state.annotations == [(4.0, 5.0, "note")]
+    # a plain re-render keeps the (moved) annotation
+    panel.render(panel._last_state)
+    assert panel._ann_artists[0].get_position() == (4.0, 5.0)
+
+
+def test_c18_grid_view_toggle_and_cap(app, tmp_path):
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    def make(i):
+        p = tmp_path / f"rep{i}.xvg"
+        p.write_text(f'@ title "rep{i}"\n0 0\n1 {i}\n', encoding="utf-8")
+        fa = parse_file(p)
+        win.files[fa.path] = fa
+        win._tables[0].add_file(fa)
+        win.table.sync_check(fa.path, True)
+        return fa
+
+    win = MainWindow()
+    try:
+        for i in range(1, 7):
+            make(i)
+        win._grid_action.setChecked(True)  # toggles grid mode + replots
+        assert win._grid_mode
+        st = win._compose_state(win._targets())
+        assert len(st.grid_states) == 6
+        win.update_plot()
+        assert len(win.panel.fig.axes) == 6
+        assert win.panel.fig.axes[0].get_title() == "rep1"
+        # single-series cells don't get legends; each cell plots its own data
+        assert len(win.panel.fig.axes[0].lines) == 1
+        # back to the overlay view
+        win._grid_action.setChecked(False)
+        st = win._compose_state(win._targets())
+        assert not st.grid_states and len(st.entries) == 6
+        # the 24-panel cap: extra files are counted, not drawn
+        for i in range(30):
+            make(100 + i)
+        win._grid_action.setChecked(True)
+        st = win._compose_state(win._targets())
+        assert len(st.grid_states) == 24
+        assert win._grid_overflow == 12
+        assert "cap" in win._info.text()
+    finally:
+        win.close()
+
+
+def test_c18_grid_render_path_panel(app):
+    import numpy as np
+
+    from xvg_plotter.ui.plot_canvas import Line, PlotPanel, PlotState
+
+    panel = PlotPanel()
+    x = np.linspace(0, 1, 20)
+    subs = []
+    for i in (1, 2):
+        cell1 = PlotState(entries=[Line(x, x * i, label=f"s{i}")])
+        cell2 = PlotState(entries=[Line(x, x * i, label=f"s{i}"),
+                                   Line(x, x * i + 1, label=f"t{i}")])
+        subs.append((f"c{i}", cell1))
+        subs.append((f"c{i}b", cell2))
+    panel.render(PlotState(title="grid", grid_states=subs))
+    assert len(panel.fig.axes) == 4
+    assert panel.fig.axes[1].get_legend() is not None  # 2 series → cell legend
+    assert panel.fig.axes[0].get_legend() is None
+    panel.render(PlotState())  # back to the single view
+    assert len(panel.fig.axes) == 1
+
+
+def test_c11_all_datasets_listed_and_overlayable(app, tmp_path):
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    fa_file = tmp_path / "multidataset.xvg"
+    fa_file.write_text('@ title "Multi"\n@ s0 legend "A"\n0 1\n1 2\n&\n'
+                       '@ s0 legend "B"\n0 5\n1 6\n2 7\n', encoding="utf-8")
+    fa = parse_file(fa_file)
+    win = MainWindow()
+    try:
+        win.files[fa.path] = fa
+        win.active = fa.path
+        win._refresh_series_dock()
+        g = win.series._groups[fa.path]
+        assert set(g.checks) == {0, 1}  # both datasets listed (C11)
+        assert len(g.checks[0]) == 1 and len(g.checks[1]) == 1
+        assert g.combo is not None
+        # every dataset's series defaults to visible, labels qualify per dataset
+        st = win._compose_state([fa])
+        assert [e.label for e in st.entries] == ["multidataset·ds1: A",
+                                                 "multidataset·ds2: B"]
+        # the toggle signal is dataset-aware: hiding ds2 leaves ds1, whose
+        # label un-qualifies once the file contributes a single dataset
+        win._on_series_toggled(fa, 1, 0, False)
+        st = win._compose_state([fa])
+        assert [e.label for e in st.entries] == ["A"]
+        # unchecking through the dock checkbox reaches the window
+        g.checks[0][0].setChecked(False)
+        assert win._compose_state([fa]).entries == []
+        # cross-file overlay: dataset 2 of file A with dataset 1 of file B
+        fb_file = fa.path.parent / "other.xvg"
+        fb_file.write_text('@ title "O"\n@ s0 legend "C"\n0 1\n1 2\n',
+                           encoding="utf-8")
+        fb = parse_file(fb_file)
+        win.files[fb.path] = fb
+        win._on_series_toggled(fa, 1, 0, True)
+        g.checks[0][0].setChecked(True)
+        st = win._compose_state([fa, fb])
+        labels = [e.label for e in st.entries]
+        assert labels == ["multidataset·ds1: A", "multidataset·ds2: B",
+                          "other: C"]  # stem-qualified in multi-file overlays
+    finally:
+        win.close()
+
+
+def test_c21_session_roundtrip(app, tmp_path):
+    from xvg_plotter import settings
+    from xvg_plotter.core.parser import parse_file
+    from xvg_plotter.ui.main_window import MainWindow
+
+    f1 = tmp_path / "one.xvg"
+    f2 = tmp_path / "two.xvg"
+    f1.write_text('@ title "one"\n0 0\n1 1\n', encoding="utf-8")
+    f2.write_text('@ title "two"\n0 0\n1 5\n', encoding="utf-8")
+    old_session = settings.get("session")
+    try:
+        win1 = MainWindow()
+        fa, fb = parse_file(f1), parse_file(f2)
+        for fx in (fa, fb):
+            win1.files[fx.path] = fx
+            win1._tables[0].add_file(fx)
+        win1.table.sync_check(fa.path, True)
+        win1.table.sync_check(fb.path, True)
+        win1.active = fb.path
+        win1._refresh_series_dock()
+        win1._on_series_color(fa, 0, 0, "#123456")
+        win1.style.chk_logy.setChecked(True)
+        win1.series.chk_fit.setChecked(True)
+        win1.update_plot()
+        win1.panel.fig.axes[0].set_xlim(0.25, 0.75)
+        win1._save_session()
+
+        win2 = MainWindow()
+        win2.restore_session()
+        assert win2.style.chk_logy.isChecked()
+        assert win2.series.chk_fit.isChecked()
+        # files arrive as the scanner would deliver them
+        win2._on_file(parse_file(f1))
+        win2._on_file(parse_file(f2))
+        assert win2.active == fb.path  # the saved active file, not the first
+        assert [f.path for f in win2._checked()] == [fa.path, fb.path]
+        assert win2._colors.get((fa.path, 0, 0)) == "#123456"
+        assert win2._compose_state(win2._targets()).logy
+        win2._on_scan_done(0)  # final render + saved zoom
+        assert win2.panel.fig.axes[0].get_xlim() == pytest.approx((0.25, 0.75))
+        win1.close()
+        win2.close()
+    finally:
+        if old_session is not None:
+            settings.set_("session", old_session)
+        else:
+            settings.set_("session", "")
+
+
+def test_c35_zh_cn_translation_roundtrip(app):
+    from xvg_plotter.i18n import DictTranslator, zh_CN
+    from xvg_plotter.ui.main_window import MainWindow
+
+    tr = DictTranslator(zh_CN.STRINGS, app)
+    assert app.installTranslator(tr)
+    try:
+        win = MainWindow()
+        menu_texts = [a.text() for a in win.menuBar().actions()]
+        assert any("文件" in t for t in menu_texts)
+        dock_titles = [d.windowTitle() for d in win._docks]
+        assert dock_titles == ["文件", "曲线与分析"]
+        assert win.series.chk_average.text() == "副本平均（均值 ± 标准差）"
+        assert win.series.cmb_norm.itemText(1) == "按首值"
+        win.series.cmb_norm.setCurrentIndex(1)
+        assert win.series.analysis_state().norm == "first value"  # untranslated mode
+        win.close()
+    finally:
+        app.removeTranslator(tr)
+    # after removal the very next window is English again
+    win = MainWindow()
+    assert "&File" in [a.text() for a in win.menuBar().actions()]
+    win.close()
